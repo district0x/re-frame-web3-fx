@@ -18,7 +18,7 @@
 (s/def ::addresses (s/coll-of string?))
 (s/def ::watch? boolean?)
 (s/def ::blockchain-filter-opts blockchain-filter-opts?)
-(s/def ::web3 (complement nil?) #_(partial inst? js/Web3))
+(s/def ::web3 (complement nil?))
 (s/def ::event-ids (s/coll-of any?))
 (s/def :web3-fx.blockchain/fns (s/coll-of (s/cat :f fn?
                                                  :args (s/* any?)
