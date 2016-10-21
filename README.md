@@ -2,6 +2,9 @@
 
 This is [re-frame](https://github.com/Day8/re-frame) library, which contains several [Effect Handlers](https://github.com/Day8/re-frame/tree/develop/docs) for working with [Ethereum](https://ethereum.org/) blockchain [Web3 API](https://github.com/ethereum/wiki/wiki/JavaScript-API), using under the hood clojurescript interop library [cljs-web3](https://github.com/madvas/cljs-web3)
 
+## See also
+* [How to create decentralised apps with Clojurescript re-frame and Ethereum](https://medium.com/@matus.lestan/how-to-create-decentralised-apps-with-clojurescript-re-frame-and-ethereum-81de24d72ff5#.kul24x62l)
+
 ## Installation
 ```clojure
 ; Add to dependencies (requires re-frame >= v0.8.0)
