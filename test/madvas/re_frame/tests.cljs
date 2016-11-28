@@ -17,10 +17,15 @@
 (def gas-limit 4500000)
 (def ^:dynamic *contract* nil)
 (def contract-source
-  "contract test {
+  "
+  pragma solidity ^0.4.4;
+
+  contract test {
+
     event onBChanged(uint num);
 
     uint public b;
+    uint public c;
 
     function test() {
       b = 5;
@@ -32,9 +37,15 @@
 
     function setB(uint _b) {
       b = _b;
+    }
+    
+    function setC(uint _c) {
+      c = _c;
       onBChanged(b);
     }
   }")
+
+
 
 (reg-event-fx
   :initialize
@@ -110,8 +121,7 @@
   :contract-constant-fns
   (fn [_ [_ contract result-ch]]
     {:web3-fx.contract/constant-fns
-     {:instance contract
-      :fns [[:multiply 9 [:multiply-loaded result-ch] :multiply-load-error]]}}))
+     {:fns [[contract :multiply 9 [:multiply-loaded result-ch] :multiply-load-error]]}}))
 
 (reg-event-fx
   :multiply-loaded
@@ -120,18 +130,25 @@
     {}))
 
 (reg-event-fx
-  :contract-state-fn
-  (fn [_ [_ contract result-ch]]
-    {:web3-fx.contract/state-fn
-     {:instance contract
-      :web3 w3
-      :db-path [:contract-state-fn]
-      :fn [:set-b 15
-           {:gas gas-limit
-            :from (second (web3-eth/accounts w3))}
-           [:set-b-sent result-ch]
-           :set-b-send-error
-           [:set-b-receipt-loaded result-ch]]}}))
+  :contract-state-fns
+  (fn [_ [_ contract result-ch1 result-ch2]]
+    {:web3-fx.contract/state-fns
+     {:web3 w3
+      :db-path [:contract-state-fns]
+      :fns [[contract
+             :set-b 15
+             {:gas gas-limit
+              :from (second (web3-eth/accounts w3))}
+             [:set-b-sent result-ch1]
+             :set-b-send-error
+             [:set-b-receipt-loaded result-ch1]]
+            [contract
+             :set-c 42
+             {:gas gas-limit
+              :from (second (web3-eth/accounts w3))}
+             [:set-c-sent result-ch2]
+             :set-c-send-error
+             [:set-c-receipt-loaded result-ch2]]]}}))
 
 (reg-event-fx
   :set-b-sent
@@ -146,13 +163,24 @@
     {}))
 
 (reg-event-fx
+  :set-c-sent
+  (fn [_ [_ result-ch result]]
+    (go (>! result-ch result))
+    {}))
+
+(reg-event-fx
+  :set-c-receipt-loaded
+  (fn [_ [_ result-ch result]]
+    (go (>! result-ch result))
+    {}))
+
+(reg-event-fx
   :contract-events
   (fn [{:keys [db]} [_ contract result-ch]]
     {:web3-fx.contract/events
-     {:instance contract
-      :db db
+     {:db db
       :db-path [:contract-events]
-      :events [[:on-b-changed {} "latest" [:on-b-changed result-ch] :on-b-changed-error]]}}))
+      :events [[contract :on-b-changed {} "latest" [:on-b-changed result-ch] :on-b-changed-error]]}}))
 
 (reg-event-fx
   :on-b-changed
@@ -171,13 +199,14 @@
 (deftest basic
   (is (web3/connected? w3))
   (is (seq (web3-eth/accounts w3)))
-  (is (web3-personal/unlock-account w3 (second (web3-eth/accounts w3)) "m" 999999))
+  ;(is (web3-personal/unlock-account w3 (second (web3-eth/accounts w3)) "m" 999999))
   (let [create-contract-ch (chan)
         balance-ch (chan)
         coinbase-ch (chan)
         block-ch (chan)
         constant-fn-ch (chan)
-        state-fn-ch (chan)
+        state-fn-ch1 (chan)
+        state-fn-ch2 (chan)
         contract-event-ch (chan)]
     (async done
       (dispatch [:initialize])
@@ -188,8 +217,8 @@
       (let [compiled (web3-eth/compile-solidity w3 contract-source)]
         (is (map? compiled))
         (dispatch [:blockchain-contract-create
-                   (:abi-definition (:info (:test compiled)))
-                   {:data (:code (:test compiled))
+                   (:abi-definition (:info compiled))
+                   {:data (:code compiled)
                     :gas gas-limit
                     :from (second (web3-eth/accounts w3))}
                    create-contract-ch]))
@@ -209,11 +238,17 @@
         (is (.eq (<! constant-fn-ch) 45))
 
         (dispatch [:contract-events *contract* contract-event-ch])
-        (dispatch [:contract-state-fn *contract* state-fn-ch])
+        (dispatch [:contract-state-fns *contract* state-fn-ch1 state-fn-ch2])
 
-        (is (string? (<! state-fn-ch)))
-        (is (map? (<! state-fn-ch)))
+        (is (string? (<! state-fn-ch1)))
+        (is (map? (<! state-fn-ch1)))
+
+        (is (string? (<! state-fn-ch2)))
+        (is (map? (<! state-fn-ch2)))
+
         (is (.eq (:num (<! contract-event-ch)) 15))
+        (is (.eq (web3-eth/contract-call *contract* :b) 15))
+        (is (.eq (web3-eth/contract-call *contract* :c) 42))
 
         (dispatch [:contract-constant-fns *contract* constant-fn-ch])
         (is (.eq (<! constant-fn-ch) 135))

@@ -25,19 +25,22 @@
                                                  :on-success ::dispatch
                                                  :on-error ::dispatch)))
 
-(s/def :web3-fx.contract/fns (s/coll-of (s/cat :f keyword?
-                                               :args (s/* ::contract-fn-arg)
-                                               :on-success ::dispatch
-                                               :on-error ::dispatch)))
+(s/def :web3-fx.contract.constant/fns (s/coll-of (s/cat :instance ::instance
+                                                        :f keyword?
+                                                        :args (s/* ::contract-fn-arg)
+                                                        :on-success ::dispatch
+                                                        :on-error ::dispatch)))
 
-(s/def :web3-fx.contract/fn (s/cat :f keyword?
-                                   :args (s/* ::contract-fn-arg)
-                                   :transaction-opts map?
-                                   :on-success ::dispatch
-                                   :on-error ::dispatch
-                                   :on-transaction-receipt ::dispatch))
+(s/def :web3-fx.contract.state/fns (s/coll-of (s/cat :instance ::instance
+                                                     :f keyword?
+                                                     :args (s/* ::contract-fn-arg)
+                                                     :transaction-opts map?
+                                                     :on-success ::dispatch
+                                                     :on-error ::dispatch
+                                                     :on-transaction-receipt ::dispatch)))
 
-(s/def ::events (s/coll-of (s/cat :event-id (s/? any?)
+(s/def ::events (s/coll-of (s/cat :instance ::instance
+                                  :event-id (s/? any?)
                                   :event-name keyword?
                                   :event-filter-opts (or map? nil?)
                                   :blockchain-filter-opts blockchain-filter-opts?
@@ -45,11 +48,11 @@
                                   :on-error ::dispatch)))
 
 
-(s/def ::contract-events (s/keys :req-un [::instance ::events ::db-path ::db]))
+(s/def ::contract-events (s/keys :req-un [::events ::db-path ::db]))
 (s/def ::contract-events-stop-watching (s/keys :req-un [::event-ids ::db-path ::db]))
 
-(s/def ::contract-constant-fns (s/keys :req-un [::instance :web3-fx.contract/fns]))
-(s/def ::contract-state-fn (s/keys :req-un [::instance ::web3 :web3-fx.contract/fn ::db-path]))
+(s/def ::contract-constant-fns (s/keys :req-un [:web3-fx.contract.constant/fns]))
+(s/def ::contract-state-fns (s/keys :req-un [::web3 :web3-fx.contract.state/fns ::db-path]))
 (s/def ::blockchain-fns (s/keys :req-un [::web3 :web3-fx.blockchain/fns]))
 (s/def ::balances (s/keys :req-un [::addresses ::dispatches ::web3]
                           :opt-un [::watch? ::db-path ::blockchain-filter-opts]))
@@ -88,7 +91,7 @@
 (reg-fx
   :web3-fx.contract/events
   (fn [raw-config]
-    (let [{:keys [instance events db-path db] :as config}
+    (let [{:keys [events db-path db] :as config}
           (s/conform ::contract-events raw-config)]
 
       (when (= :cljs.spec/invalid config)
@@ -97,7 +100,7 @@
       (let [new-filters
             (->> events
               (map ensure-filter-params)
-              (reduce (fn [acc {:keys [event-id event-name on-success on-error
+              (reduce (fn [acc {:keys [event-id event-name instance on-success on-error
                                        event-filter-opts blockchain-filter-opts]}]
                         (event-stop-watching! db db-path event-id)
                         (assoc acc event-id (web3-eth/contract-call
@@ -123,10 +126,10 @@
 (reg-fx
   :web3-fx.contract/constant-fns
   (fn [raw-params]
-    (let [{:keys [fns instance] :as params} (s/conform ::contract-constant-fns raw-params)]
+    (let [{:keys [fns] :as params} (s/conform ::contract-constant-fns raw-params)]
       (when (= :cljs.spec/invalid params)
         (console :error (s/explain-str ::contract-constant-fns raw-params)))
-      (doseq [{:keys [f args on-success on-error]} fns]
+      (doseq [{:keys [f instance args on-success on-error]} fns]
         (apply web3-eth/contract-call (concat [instance f]
                                               args
                                               [(dispach-fn on-success on-error)]))))))
@@ -185,17 +188,19 @@
   (fn [err transaction-hash]
     (if err
       (dispatch-call on-error err)
-      (do (dispatch-call on-success transaction-hash)
-          (dispatch [:web3-fx.contract/add-transaction-hash-to-watch
-                     web3 db-path transaction-hash on-transaction-receipt])))))
+      (do
+        transaction-hash
+        (dispatch-call on-success transaction-hash)
+        (dispatch [:web3-fx.contract/add-transaction-hash-to-watch
+                   web3 db-path transaction-hash on-transaction-receipt])))))
 
 (reg-fx
-  :web3-fx.contract/state-fn
+  :web3-fx.contract/state-fns
   (fn [raw-params]
-    (let [{:keys [web3 instance db-path] :as params} (s/conform ::contract-state-fn raw-params)]
+    (let [{:keys [web3 db-path fns] :as params} (s/conform ::contract-state-fns raw-params)]
       (when (= :cljs.spec/invalid params)
-        (console :error (s/explain-str ::contract-state-fn raw-params)))
-      (let [{:keys [f args transaction-opts on-success on-error on-transaction-receipt]} (:fn params)]
+        (console :error (s/explain-str ::contract-state-fns raw-params)))
+      (doseq [{:keys [f instance args transaction-opts on-success on-error on-transaction-receipt]} fns]
         (apply web3-eth/contract-call
                (concat [instance f]
                        args
