@@ -100,7 +100,7 @@ This is to call state changing method of your contract (ones you need to pay gas
 (reg-event-fx
   :contract-state-fn
   (fn [_ [_ contract-instance some-param]]
-    {:web3-fx.contract/state-fn
+    {:web3-fx.contract/state-fns
      {:web3 web3
       :db-path [:change-settings-fn]
       :fns [[contract-instance
