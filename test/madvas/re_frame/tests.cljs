@@ -13,6 +13,8 @@
             )
   (:require-macros [cljs.core.async.macros :refer [go]]))
 
+;(enable-console-print!)
+
 (def w3 (web3/create-web3 "http://localhost:8545/"))
 (def gas-limit 4500000)
 (def ^:dynamic *contract* nil)
@@ -159,6 +161,7 @@
 (reg-event-fx
   :set-b-receipt-loaded
   (fn [_ [_ result-ch result]]
+    (println ":set-b-receipt-loadedd")
     (go (>! result-ch result))
     {}))
 
@@ -171,6 +174,7 @@
 (reg-event-fx
   :set-c-receipt-loaded
   (fn [_ [_ result-ch result]]
+    (println ":set-c-receipt-loaded")
     (go (>! result-ch result))
     {}))
 

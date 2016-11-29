@@ -58,9 +58,12 @@
                           :opt-un [::watch? ::db-path ::blockchain-filter-opts]))
 (s/def ::blockchain-filter (s/keys :req-un [::db-path ::dispatches ::web3 ::blockchain-filter-opts]))
 
-(defn- dispatch-call [dispatch-conformed & args]
+(defn- dispatch-vec [dispatch-conformed & args]
   (let [{:keys [kw sq]} (apply hash-map dispatch-conformed)]
-    (dispatch (vec (concat (or sq [kw]) args)))))
+    (vec (concat (or sq [kw]) args))))
+
+(defn- dispatch-call [& args]
+  (dispatch (apply dispatch-vec args)))
 
 (defn- ensure-filter-params [event]
   (if (:event-id event)
@@ -140,19 +143,18 @@
     (web3-eth/stop-watching! blockchain-filter (fn [])))
   (assoc-in db filter-db-path nil))
 
-(reg-event-db
+(reg-event-fx
   :web3-fx.contract/transaction-receipt-loaded
-  (fn [db [_ [tx-hashes-db-path filter-db-path] transaction-hash receipt on-transaction-receipt]]
-    (let [rest-tx-hashes (dissoc (get-in db tx-hashes-db-path) transaction-hash)]
+  (fn [{:keys [db]} [_ [tx-hashes-db-path filter-db-path] transaction-hash receipt on-transaction-receipt]]
+    (when (get-in db (conj tx-hashes-db-path transaction-hash))
+      (let [rest-tx-hashes (dissoc (get-in db tx-hashes-db-path) transaction-hash)]
+        {:dispatch (dispatch-vec on-transaction-receipt receipt)
+         :db (cond-> db
+               (empty? rest-tx-hashes)
+               (remove-blockchain-filter! filter-db-path)
 
-      (dispatch-call on-transaction-receipt receipt)
-
-      (cond-> db
-        (empty? rest-tx-hashes)
-        (remove-blockchain-filter! filter-db-path)
-
-        true
-        (assoc-in tx-hashes-db-path rest-tx-hashes)))))
+               true
+               (assoc-in tx-hashes-db-path rest-tx-hashes))}))))
 
 (reg-event-db
   :web3-fx.contract/add-transaction-hash-to-watch
