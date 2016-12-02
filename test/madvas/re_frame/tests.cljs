@@ -123,7 +123,8 @@
   :contract-constant-fns
   (fn [_ [_ contract result-ch]]
     {:web3-fx.contract/constant-fns
-     {:fns [[contract :multiply 9 [:multiply-loaded result-ch] :multiply-load-error]]}}))
+     {:fns [[contract :multiply 9 [:multiply-loaded result-ch] :multiply-load-error]
+            nil]}}))
 
 (reg-event-fx
   :multiply-loaded
@@ -144,6 +145,7 @@
              [:set-b-sent result-ch1]
              :set-b-send-error
              [:set-b-receipt-loaded result-ch1]]
+            nil
             [contract
              :set-c 42
              {:gas gas-limit
