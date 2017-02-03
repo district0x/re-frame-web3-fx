@@ -20,7 +20,7 @@
 (def ^:dynamic *contract* nil)
 (def contract-source
   "
-  pragma solidity ^0.4.4;
+  pragma solidity ^0.4.6;
 
   contract test {
 
@@ -124,7 +124,7 @@
   (fn [_ [_ contract result-ch]]
     {:web3-fx.contract/constant-fns
      {:fns [[contract :multiply 9 [:multiply-loaded result-ch] :multiply-load-error]
-            nil]}}))
+            ]}}))
 
 (reg-event-fx
   :multiply-loaded
@@ -163,7 +163,6 @@
 (reg-event-fx
   :set-b-receipt-loaded
   (fn [_ [_ result-ch result]]
-    (println ":set-b-receipt-loadedd")
     (go (>! result-ch result))
     {}))
 
@@ -176,7 +175,6 @@
 (reg-event-fx
   :set-c-receipt-loaded
   (fn [_ [_ result-ch result]]
-    (println ":set-c-receipt-loaded")
     (go (>! result-ch result))
     {}))
 
