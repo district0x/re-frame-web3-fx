@@ -165,5 +165,6 @@ This way you can stop previously setup event listeners.
 
 ## DAPPS using re-frame-web3-fx
 * [emojillionaire](https://github.com/madvas/emojillionaire)
+* [ethlance](https://github.com/madvas/ethlance)
 
 
