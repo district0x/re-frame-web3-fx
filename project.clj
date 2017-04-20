@@ -1,9 +1,9 @@
-(defproject madvas.re-frame/web3-fx "0.1.4"
+(defproject madvas.re-frame/web3-fx "0.1.5"
   :description "A re-frame effects handler for performing Ethereum Web3 API tasks"
   :url "https://github.com/madvas/re-frame-web3-fx"
   :license {:name "MIT"}
   :dependencies [[org.clojure/clojurescript "1.9.227"]
-                 [cljs-web3 "0.18.2-0"]
+                 [cljs-web3 "0.18.4-0"]
                  [re-frame "0.8.0"]]
 
   :plugins [[lein-cljsbuild "1.1.4"]]

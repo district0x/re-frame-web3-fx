@@ -15,7 +15,7 @@
 
 ;(enable-console-print!)
 
-(def w3 (web3/create-web3 "http://localhost:8545/"))
+(def w3 (web3/create-web3 "http://localhost:8549/"))
 (def gas-limit 4500000)
 (def ^:dynamic *contract* nil)
 (def contract-source
