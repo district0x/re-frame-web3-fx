@@ -8,7 +8,7 @@ This is [re-frame](https://github.com/Day8/re-frame) library, which contains sev
 ## Installation
 ```clojure
 ; Add to dependencies (requires re-frame >= v0.8.0)
-[madvas.re-frame/web3-fx "0.1.6"]
+[madvas.re-frame/web3-fx "0.1.7"]
 ```
 ```clojure
 (ns my.app
@@ -66,6 +66,8 @@ This is to stop previously setup filter
 ```
 #### :web3-fx.blockchain/balances
 This one is to obtain balance from address(es). You can also pass `:watch? true` and it will setup blockchain filter and calling your dispatch with a new balance after every new block. When you pass `:watch? true` you must also provide `:db-path` so filter can be saved.
+
+**Pro Tip:** You can add optional `:instance` with instance or an arbitrary [ERC20](https://github.com/ethereum/EIPs/issues/20) token to load & watch balances of that token!
 ```clojure
 (reg-event-fx
   :get-balances
@@ -76,6 +78,7 @@ This one is to obtain balance from address(es). You can also pass `:watch? true`
                   "0xe206f52728e2c1e23de7d42d233f39ac2e748977"]
       :watch? true
       :blockchain-filter-opts {:from-block 0 :to-block "latest"}
+      :instance erc20-token-instance ;; optional, pass if you want to load balances of some ERC20 token 
       :db-path [:balances]
       :dispatches [:balance-loaded :balance-load-error]}}))
       
@@ -140,8 +143,7 @@ If you pass same event id as already exists, old one will be stopped and new sta
   :contract-events
   (fn [{:keys [db]} [_ contract-instance]]
     {:web3-fx.contract/events
-     {:db db
-      :db-path [:contract-events]
+     {:db-path [:contract-events]
       :events [[contract-instance :on-settings-changed {} "latest" :on-settings-changed :on-settings-change-error]
                [contract-instance :some-event-id-1 :on-some-event {:some-param 1} "latest" :on-some-event-success :on-some-event-error]
                [contract-instance :some-event-id-2 :on-some-event {} {:from-block 0 :to-block 99} :on-some-event-success :on-some-event-error]]}}))
@@ -158,8 +160,7 @@ This way you can stop previously setup event listeners.
   :contract-events-stop-watching
   (fn [{:keys [db]} _]
     {:web3-fx.contract/events-stop-watching
-     {:db db
-      :db-path [:contract-events]
+     {:db-path [:contract-events]
       :event-ids [:on-settings-changed :some-event-id-1]}}))
 ```
 

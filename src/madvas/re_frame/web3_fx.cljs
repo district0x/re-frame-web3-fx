@@ -8,7 +8,6 @@
   (or (map? x) (string? x) (nil? x)))
 
 (s/def ::instance (complement nil?))
-(s/def ::db map?)
 (s/def ::db-path (s/coll-of keyword?))
 (s/def ::dispatch (s/or :kw keyword?
                         :sq sequential?))
@@ -48,14 +47,14 @@
                                              :on-error ::dispatch))))
 
 
-(s/def ::contract-events (s/keys :req-un [::events ::db-path ::db]))
-(s/def ::contract-events-stop-watching (s/keys :req-un [::event-ids ::db-path ::db]))
+(s/def ::contract-events (s/keys :req-un [::events ::db-path]))
+(s/def ::contract-events-stop-watching (s/keys :req-un [::event-ids ::db-path]))
 
 (s/def ::contract-constant-fns (s/keys :req-un [:web3-fx.contract.constant/fns]))
 (s/def ::contract-state-fns (s/keys :req-un [::web3 :web3-fx.contract.state/fns ::db-path]))
 (s/def ::blockchain-fns (s/keys :req-un [::web3 :web3-fx.blockchain/fns]))
 (s/def ::balances (s/keys :req-un [::addresses ::dispatches ::web3]
-                          :opt-un [::watch? ::db-path ::blockchain-filter-opts]))
+                          :opt-un [::watch? ::db-path ::blockchain-filter-opts ::instance]))
 (s/def ::blockchain-filter (s/keys :req-un [::db-path ::dispatches ::web3 ::blockchain-filter-opts]))
 
 (defn- dispatch-vec [dispatch-conformed & args]
@@ -94,49 +93,67 @@
 (reg-fx
   :web3-fx.contract/events
   (fn [raw-config]
-    (let [{:keys [events db-path db] :as config}
+    (let [{:keys [events db-path] :as config}
           (s/conform ::contract-events raw-config)]
 
-      (when (= :cljs.spec/invalid config)
-        (console :error (s/explain-str ::contract-events raw-config)))
+      (if (= :cljs.spec/invalid config)
+        (console :error (s/explain-str ::contract-events raw-config))
+        (dispatch [:web3-fx.contract/events* config])))))
 
-      (let [new-filters
-            (->> events
-              (remove nil?)
-              (map ensure-filter-params)
-              (reduce (fn [acc {:keys [event-id event-name instance on-success on-error
-                                       event-filter-opts blockchain-filter-opts]}]
-                        (event-stop-watching! db db-path event-id)
-                        (assoc acc event-id (web3-eth/contract-call
-                                              instance
-                                              event-name
-                                              event-filter-opts
-                                              blockchain-filter-opts
-                                              (contract-event-dispach-fn on-success on-error)))) {}))]
-        (dispatch [:web3-fx.contract/assoc-event-filters db-path new-filters])))))
+(reg-event-fx
+  :web3-fx.contract/events*
+  (fn [{:keys [db]} [_ config]]
+    {:web3-fx.contract/events* (assoc config :db db)}))
+
+(reg-fx
+  :web3-fx.contract/events*
+  (fn [{:keys [events db-path db] :as config}]
+    (let [new-filters
+          (->> events
+            (remove nil?)
+            (map ensure-filter-params)
+            (reduce (fn [acc {:keys [event-id event-name instance on-success on-error
+                                     event-filter-opts blockchain-filter-opts]}]
+                      (event-stop-watching! db db-path event-id)
+                      (assoc acc event-id (web3-eth/contract-call
+                                            instance
+                                            event-name
+                                            event-filter-opts
+                                            blockchain-filter-opts
+                                            (contract-event-dispach-fn on-success on-error)))) {}))]
+      (dispatch [:web3-fx.contract/assoc-event-filters db-path new-filters]))))
 
 (reg-fx
   :web3-fx.contract/events-stop-watching
   (fn [raw-config]
-    (let [{:keys [event-ids db-path db] :as config}
+    (let [{:keys [event-ids db-path] :as config}
           (s/conform ::contract-events-stop-watching raw-config)]
 
-      (when (= :cljs.spec/invalid config)
-        (console :error (s/explain-str ::contract-events-stop-watching raw-config)))
+      (if (= :cljs.spec/invalid config)
+        (console :error (s/explain-str ::contract-events-stop-watching raw-config))
+        (dispatch [:web3-fx.contract/events* config])))))
 
-      (doseq [event-id event-ids]
-        (event-stop-watching! db db-path event-id)))))
+(reg-event-fx
+  :web3-fx.contract/events-stop-watching*
+  (fn [{:keys [db]} [_ config]]
+    {:web3-fx.contract/events-stop-watching* (assoc config :db db)}))
+
+(reg-fx
+  :web3-fx.contract/events-stop-watching*
+  (fn [{:keys [event-ids db-path db] :as config}]
+    (doseq [event-id event-ids]
+      (event-stop-watching! db db-path event-id))))
 
 (reg-fx
   :web3-fx.contract/constant-fns
   (fn [raw-params]
     (let [{:keys [fns] :as params} (s/conform ::contract-constant-fns raw-params)]
-      (when (= :cljs.spec/invalid params)
-        (console :error (s/explain-str ::contract-constant-fns raw-params)))
-      (doseq [{:keys [f instance args on-success on-error]} (remove nil? fns)]
-        (apply web3-eth/contract-call (concat [instance f]
-                                              args
-                                              [(dispach-fn on-success on-error)]))))))
+      (if (= :cljs.spec/invalid params)
+        (console :error (s/explain-str ::contract-constant-fns raw-params))
+        (doseq [{:keys [f instance args on-success on-error]} (remove nil? fns)]
+          (apply web3-eth/contract-call (concat [instance f]
+                                                args
+                                                [(dispach-fn on-success on-error)])))))))
 
 
 (defn- remove-blockchain-filter! [db filter-db-path]
@@ -201,24 +218,24 @@
   :web3-fx.contract/state-fns
   (fn [raw-params]
     (let [{:keys [web3 db-path fns] :as params} (s/conform ::contract-state-fns raw-params)]
-      (when (= :cljs.spec/invalid params)
-        (console :error (s/explain-str ::contract-state-fns raw-params)))
-      (doseq [{:keys [f instance args transaction-opts on-success on-error on-transaction-receipt]}
-              (remove nil? fns)]
-        (apply web3-eth/contract-call
-               (concat [instance f]
-                       args
-                       [transaction-opts]
-                       [(create-state-fn-callback web3 db-path on-success on-error on-transaction-receipt)]))))))
+      (if (= :cljs.spec/invalid params)
+        (console :error (s/explain-str ::contract-state-fns raw-params))
+        (doseq [{:keys [f instance args transaction-opts on-success on-error on-transaction-receipt]}
+                (remove nil? fns)]
+          (apply web3-eth/contract-call
+                 (concat [instance f]
+                         args
+                         [transaction-opts]
+                         [(create-state-fn-callback web3 db-path on-success on-error on-transaction-receipt)])))))))
 
 (reg-fx
   :web3-fx.blockchain/fns
   (fn [raw-params]
     (let [{:keys [fns] :as params} (s/conform ::blockchain-fns raw-params)]
-      (when (= :cljs.spec/invalid params)
-        (console :error (s/explain-str ::blockchain-fns raw-params)))
-      (doseq [{:keys [f args on-success on-error]} (remove nil? fns)]
-        (apply f (concat [(:web3 params)] args [(dispach-fn on-success on-error)]))))))
+      (if (= :cljs.spec/invalid params)
+        (console :error (s/explain-str ::blockchain-fns raw-params))
+        (doseq [{:keys [f args on-success on-error]} (remove nil? fns)]
+          (apply f (concat [(:web3 params)] args [(dispach-fn on-success on-error)])))))))
 
 (reg-event-db
   :web3-fx.blockchain/add-addresses-to-watch
@@ -245,21 +262,72 @@
           (assoc-in addresses-db-path all-addresses)
           (assoc-in filter-db-path blockchain-filter))))))
 
+(reg-event-fx
+  :web3-fx.blockchain.erc20/balances-of
+  (fn [db [_ {:keys [instance on-success on-error addresses]}]]
+    {:web3-fx.contract/constant-fns
+     {:fns (for [address addresses]
+             [instance
+              :balance-of
+              address
+              [:web3-fx.blockchain.erc20/balance-loaded {:address address
+                                                         :on-success on-success}]
+              (dispatch-vec on-error address)])}}))
+
+(reg-event-fx                                               ;; To keep it consisted with eth balance result order
+  :web3-fx.blockchain.erc20/balance-loaded
+  (fn [db [_ {:keys [address on-success]} balance]]
+    {:dispatch (dispatch-vec on-success balance address)}))
+
+(reg-event-fx
+  ;; Instead of setting up 2 events per address, would be better to use web3 topic filtering, but didn't work when I tried
+  :web3-fx.blockchain.erc20/add-addresses-to-watch
+  (fn [db [_ {:keys [db-path instance blockchain-filter-opts addresses on-success on-error] :as config}]]
+    (let [instance-address (aget instance "address")]
+      (if instance-address
+        {:web3-fx.contract/events
+         {:db-path db-path
+          :events (apply concat
+                         (for [address addresses]
+                           (let [base-event-id (str instance-address "-" address)
+                                 disp [:web3-fx.blockchain.erc20/on-transfer address config]]
+                             [[instance (str base-event-id "-transfer-from")
+                               :Transfer
+                               {:from address}
+                               blockchain-filter-opts
+                               disp
+                               (dispatch-vec on-error address)]
+                              [instance (str base-event-id "-transfer-to")
+                               :Transfer
+                               {:to address}
+                               blockchain-filter-opts
+                               disp
+                               (dispatch-vec on-error address)]])))}}))))
+
+(reg-event-fx
+  :web3-fx.blockchain.erc20/on-transfer
+  (fn [db [_ address config]]
+    {:dispatch [:web3-fx.blockchain.erc20/balances-of (assoc config :addresses [address])]}))
+
 (reg-fx
   :web3-fx.blockchain/balances
-  (fn [{:keys [addresses web3 dispatches watch? db-path blockchain-filter-opts] :as config}]
+  (fn [{:keys [addresses web3 dispatches watch? db-path blockchain-filter-opts instance] :as config}]
     (s/assert ::balances config)
-    (let [{:keys [on-success on-error]} (s/conform ::dispatches dispatches)]
-      (doseq [address addresses]
-        (web3-eth/get-balance web3 address (dispach-fn on-success on-error address)))
+    (let [{:keys [on-success on-error] :as dispatches-conformed} (s/conform ::dispatches dispatches)]
+      (if-not instance
+        (doseq [address addresses]
+          (web3-eth/get-balance web3 address (dispach-fn on-success on-error address)))
+        (dispatch [:web3-fx.blockchain.erc20/balances-of (merge config dispatches-conformed)]))
       (when (and watch? (seq addresses))
-        (dispatch [:web3-fx.blockchain/add-addresses-to-watch
-                   web3
-                   db-path
-                   addresses
-                   blockchain-filter-opts
-                   on-success
-                   on-error])))))
+        (if-not instance
+          (dispatch [:web3-fx.blockchain/add-addresses-to-watch
+                     web3
+                     db-path
+                     addresses
+                     blockchain-filter-opts
+                     on-success
+                     on-error])
+          (dispatch [:web3-fx.blockchain.erc20/add-addresses-to-watch (merge config dispatches-conformed)]))))))
 
 (reg-event-db
   :web3-fx.blockchain/add-filter
