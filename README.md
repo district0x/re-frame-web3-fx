@@ -8,7 +8,7 @@ This is [re-frame](https://github.com/Day8/re-frame) library, which contains sev
 ## Installation
 ```clojure
 ; Add to dependencies (requires re-frame >= v0.8.0)
-[madvas.re-frame/web3-fx "0.1.7"]
+[madvas.re-frame/web3-fx "0.1.8"]
 ```
 ```clojure
 (ns my.app
