@@ -6,6 +6,7 @@
             [cljs-web3.net :as web3-net]
             [cljs-web3.personal :as web3-personal]
             [cljs-web3.shh :as web3-shh]
+            [cljs-web3.evm :as web3-evm]
             [cljs.test :refer-macros [deftest is testing run-tests use-fixtures async]]
             [cljsjs.web3]
             [madvas.re-frame.web3-fx]
@@ -24,7 +25,7 @@
 
   contract test {
 
-    event onBChanged(uint num);
+    event onCChanged(uint num);
 
     uint public b;
     uint public c;
@@ -43,7 +44,7 @@
     
     function setC(uint _c) {
       c = _c;
-      onBChanged(b);
+      onCChanged(c);
     }
   }")
 
@@ -56,12 +57,16 @@
 
 (reg-event-fx
   :blockchain-contract-create
-  (fn [_ [_ abi args contract-ch]]
+  (fn [_ [_ abi tx-opts contract-ch]]
     {:web3-fx.blockchain/fns
      {:web3 w3
-      :fns [[web3-eth/contract-new abi args
-             [:blockchain-contract-created contract-ch]
-             :blockchain-contract-create-error]]}}))
+      :fns [{:f web3-eth/contract-new
+             :args [abi tx-opts]
+             :on-success [:blockchain-contract-created contract-ch]
+             :on-error [:blockchain-contract-create-error]}
+            #_[web3-eth/contract-new abi tx-opts
+               [:blockchain-contract-created contract-ch]
+               :blockchain-contract-create-error]]}}))
 
 (reg-event-fx
   :blockchain-contract-created
@@ -91,7 +96,10 @@
   (fn [_ [_ coinbase-ch]]
     {:web3-fx.blockchain/fns
      {:web3 w3
-      :fns [[web3-eth/coinbase [:coinbase-loaded coinbase-ch] :coinbase-load-error]]}}))
+      :fns [[web3-eth/coinbase [:coinbase-loaded coinbase-ch] :coinbase-load-error]
+            {:f web3-eth/coinbase
+             :on-success [:coinbase-loaded coinbase-ch]
+             :on-error [:coinbase-load-error]}]}}))
 
 (reg-event-fx
   :coinbase-loaded
@@ -124,7 +132,11 @@
   (fn [_ [_ contract result-ch]]
     {:web3-fx.contract/constant-fns
      {:fns [[contract :multiply 9 [:multiply-loaded result-ch] :multiply-load-error]
-            ]}}))
+            {:instance contract
+             :method :multiply
+             :args [9]
+             :on-success [:multiply-loaded result-ch]
+             :on-error [:multiply-load-error]}]}}))
 
 (reg-event-fx
   :multiply-loaded
@@ -146,13 +158,14 @@
              :set-b-send-error
              [:set-b-receipt-loaded result-ch1]]
             nil
-            [contract
-             :set-c 42
-             {:gas gas-limit
-              :from (second (web3-eth/accounts w3))}
-             [:set-c-sent result-ch2]
-             :set-c-send-error
-             [:set-c-receipt-loaded result-ch2]]]}}))
+            {:instance contract
+             :method :set-c
+             :args [42]
+             :tx-opts {:gas gas-limit
+                       :from (second (web3-eth/accounts w3))}
+             :on-success [:set-c-sent result-ch2]
+             :on-error [:set-c-send-error]
+             :on-tx-receipt [:set-c-receipt-loaded result-ch2]}]}}))
 
 (reg-event-fx
   :set-b-sent
@@ -184,10 +197,17 @@
     {:web3-fx.contract/events
      {:db db
       :db-path [:contract-events]
-      :events [[contract :on-b-changed {} "latest" [:on-b-changed result-ch] :on-b-changed-error]]}}))
+      :events [[contract :on-c-changed {} "latest" [:on-c-changed result-ch] :on-c-changed-error]
+               {:instance contract
+                :event-id :custom-event-id
+                :event-name :on-c-changed
+                :event-filter-opts {}
+                :blockchain-filter-opts "latest"
+                :on-success [:on-c-changed result-ch]
+                :on-error [:on-c-changed-error]}]}}))
 
 (reg-event-fx
-  :on-b-changed
+  :on-c-changed
   (fn [_ [_ result-ch result]]
     (go (>! result-ch result))
     {}))
@@ -198,7 +218,7 @@
     {:web3-fx.contract/events-stop-watching
      {:db db
       :db-path [:contract-events]
-      :event-ids [:on-b-changed]}}))
+      :event-ids [:on-c-changed :custom-event-id]}}))
 
 (deftest basic
   (is (web3/connected? w3))
@@ -228,6 +248,7 @@
                    create-contract-ch]))
       (go
         (is (web3/address? (<! coinbase-ch)))
+        (is (web3/address? (<! coinbase-ch)))               ; Testing 2 different notations
         (is (.greaterThan (<! balance-ch) 0))
 
         (<! create-contract-ch)
@@ -240,8 +261,8 @@
 
         (dispatch [:contract-constant-fns *contract* constant-fn-ch])
         (is (.eq (<! constant-fn-ch) 45))
+        (is (.eq (<! constant-fn-ch) 45))                   ; Testing 2 different notations
 
-        (dispatch [:contract-events *contract* contract-event-ch])
         (dispatch [:contract-state-fns *contract* state-fn-ch1 state-fn-ch2])
 
         (is (string? (<! state-fn-ch1)))
@@ -250,12 +271,16 @@
         (is (string? (<! state-fn-ch2)))
         (is (map? (<! state-fn-ch2)))
 
-        (is (.eq (:num (<! contract-event-ch)) 15))
+        (dispatch [:contract-events *contract* contract-event-ch])
+
+        (is (.eq (:num (<! contract-event-ch)) 42))
+        (is (.eq (:num (<! contract-event-ch)) 42))         ; Testing 2 different notations
         (is (.eq (web3-eth/contract-call *contract* :b) 15))
         (is (.eq (web3-eth/contract-call *contract* :c) 42))
 
         (dispatch [:contract-constant-fns *contract* constant-fn-ch])
         (is (.eq (<! constant-fn-ch) 135))
+        (is (.eq (<! constant-fn-ch) 135))                  ; Testing 2 different notations
 
         (dispatch [:contract-events-stop-watching])
         (dispatch [:blockchain-filter-stop-watching])

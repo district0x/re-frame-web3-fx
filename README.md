@@ -8,7 +8,7 @@ This is [re-frame](https://github.com/Day8/re-frame) library, which contains sev
 ## Installation
 ```clojure
 ; Add to dependencies (requires re-frame >= v0.8.0)
-[madvas.re-frame/web3-fx "0.1.8"]
+[madvas.re-frame/web3-fx "0.1.9"]
 ```
 ```clojure
 (ns my.app
@@ -26,14 +26,18 @@ For example to create a new contract:
 (reg-event-fx
   :create-contract
   (fn [_ [_ abi bin]]
-    {:web3-fx.blockchain/fns
-     {:web3 w3
-      :fns [[cljs-web3.eth/contract-new abi
-             {:data bin
-              :gas 4500000
-              :from "0x6fce64667819c82a8bcbb78e294d7b444d2e1a29"}
-             :contract-created
-             :contract-create-error]]}}))
+    (let [tx-opts {:data bin
+                   :gas 4500000
+                   :from "0x6fce64667819c82a8bcbb78e294d7b444d2e1a29"}]
+      {:web3-fx.blockchain/fns
+       {:web3 w3
+        :fns [[cljs-web3.eth/contract-new abi tx-opts :contract-created :contract-create-error]
+              ;; Alternatively, you can use map notation
+              ;; Code below will do exactly same as above
+              {:f cljs-web3.eth/contract-new
+               :args [abi tx-opts]
+               :on-success :contract-created
+               :on-error :contract-create-error}]}})))
              
 (reg-event-fx
   :contract-created
@@ -95,7 +99,14 @@ This one is to call your contract's constant methods (ones that doesn't change c
   (fn [_ [_ contract-instance some-arg some-other-arg]]
     {:web3-fx.contract/constant-fns
      {:fns [[contract-instance :some-method some-arg some-other-arg :some-method-result :some-method-error]
-            [contract-instance :multiply 9 6 :multiply-result :multiply-error]]}}))
+            [contract-instance :multiply 9 6 :multiply-result :multiply-error]
+            ;; Alternatively, you can use map notation
+            ;; Code below will do exactly same as above
+            {:instance contract-instance
+             :method :multiply
+             :args [9 6]
+             :on-success :multiply-result
+             :on-error :multiply-error}]}}))
 ```
 #### :web3-fx.contract/state-fns
 This is to call state changing methods of your contract (ones you need to pay gas to execute). Again, first in `:fn` is kebab-cased name of contract method. Then goes args. After args you pass options related to transaction. Then we have 3 dispatches. First one is called right after user confirms transaction. Second one is called if user rejected transaction. And the last one is called after transaction has been processed by blockchain and [transaction receipt](https://github.com/ethereum/wiki/wiki/JavaScript-API#web3ethgettransactionreceipt) is available. To get a receipt, a blockchain filter needs to be setup. This library does it for you, but you need to provide `:db-path` where filter can be saved, for later removal. Note, getting transaction receipt is the only way, you can verify if your transaction didn't run out of gas or thrown error. Therefore it's essencial to always have callback for it.
@@ -103,16 +114,23 @@ This is to call state changing methods of your contract (ones you need to pay ga
 (reg-event-fx
   :contract-state-fn
   (fn [_ [_ contract-instance some-param]]
-    {:web3-fx.contract/state-fns
-     {:web3 web3
-      :db-path [:change-settings-fn]
-      :fns [[contract-instance
-            :change-settings 20 10
-           {:gas 4500000
-            :from "0xe206f52728e2c1e23de7d42d233f39ac2e748977"}
-           [:change-settings-sent some-param]
-           :change-settings-error
-           [:change-settings-transaction-receipt-loaded some-param]]]}}))
+    (let [tx-opts {:gas 4500000 :from "0xe206f52728e2c1e23de7d42d233f39ac2e748977"}]
+      {:web3-fx.contract/state-fns
+       {:web3 web3
+        :db-path [:change-settings-fn]
+        :fns [[contract-instance :change-settings 20 10 tx-opts
+               [:change-settings-sent some-param]
+               :change-settings-error
+               [:change-settings-transaction-receipt-loaded some-param]]
+              ;; Alternatively, you can use map notation
+              ;; Code below will do exactly same as above
+              {:instance contract-instance
+               :method :change-settings
+               :args [20 10]
+               :tx-opts tx-opts
+               :on-success [:change-settings-sent some-param]
+               :on-error :change-settings-error
+               :on-tx-receipt [:change-settings-transaction-receipt-loaded some-param]}]}})))
            
 (reg-event-fx
   :chainge-settings-sent
@@ -146,7 +164,16 @@ If you pass same event id as already exists, old one will be stopped and new sta
      {:db-path [:contract-events]
       :events [[contract-instance :on-settings-changed {} "latest" :on-settings-changed :on-settings-change-error]
                [contract-instance :some-event-id-1 :on-some-event {:some-param 1} "latest" :on-some-event-success :on-some-event-error]
-               [contract-instance :some-event-id-2 :on-some-event {} {:from-block 0 :to-block 99} :on-some-event-success :on-some-event-error]]}}))
+               [contract-instance :some-event-id-2 :on-some-event {} {:from-block 0 :to-block 99} :on-some-event-success :on-some-event-error]
+               ;; Alternatively, you can use map notation
+               ;; Code below will do exactly same as above
+               {:instance contract-instance
+                :event-id :some-event-id-2
+                :event-name :on-some-event
+                :event-filter-opts {}
+                :blockchain-filter-opts {:from-block 0 :to-block 99}
+                :on-success :on-some-event-success
+                :on-error :on-some-event-error}]}}))
                
 (reg-event-fx
   :on-settings-changed
