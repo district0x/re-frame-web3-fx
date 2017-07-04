@@ -11,7 +11,7 @@
             [cljsjs.web3]
             [madvas.re-frame.web3-fx]
             [re-frame.core :refer [reg-event-fx console dispatch]]
-            )
+            [re-frame.db :refer [app-db]])
   (:require-macros [cljs.core.async.macros :refer [go]]))
 
 ;(enable-console-print!)
@@ -275,6 +275,10 @@
 
         (is (.eq (:num (<! contract-event-ch)) 42))
         (is (.eq (:num (<! contract-event-ch)) 42))         ; Testing 2 different notations
+
+        (is (get-in @app-db [:contract-events :on-c-changed]))
+        (is (get-in @app-db [:contract-events :custom-event-id]))
+
         (is (.eq (web3-eth/contract-call *contract* :b) 15))
         (is (.eq (web3-eth/contract-call *contract* :c) 42))
 
@@ -284,5 +288,12 @@
 
         (dispatch [:contract-events-stop-watching])
         (dispatch [:blockchain-filter-stop-watching])
+
+        (is (true? (<! (let [ch (chan)]
+                         (js/setTimeout #(go (>! ch true)) 10)
+                         ch))))
+
+        (is (nil? (get-in @app-db [:contract-events :on-c-changed])))
+        (is (nil? (get-in @app-db [:contract-events :custom-event-id])))
 
         (done)))))

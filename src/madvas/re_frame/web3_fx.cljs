@@ -161,8 +161,9 @@
 
 (reg-event-fx
   :web3-fx.contract/events-stop-watching*
-  (fn [{:keys [db]} [_ config]]
-    {:web3-fx.contract/events-stop-watching* (assoc config :db db)}))
+  (fn [{:keys [db]} [_ {:keys [event-ids db-path] :as config}]]
+    {:db (apply update-in db db-path dissoc event-ids)
+     :web3-fx.contract/events-stop-watching* (assoc config :db db)}))
 
 (reg-fx
   :web3-fx.contract/events-stop-watching*
