@@ -1,7 +1,7 @@
 (ns madvas.re-frame.web3-fx
   (:require
     [cljs-web3.eth :as web3-eth]
-    [cljs.spec :as s]
+    [cljs.spec.alpha :as s]
     [re-frame.core :refer [reg-fx dispatch console reg-event-db reg-event-fx]]))
 
 (defn- blockchain-filter-opts? [x]
