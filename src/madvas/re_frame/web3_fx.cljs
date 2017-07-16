@@ -222,7 +222,7 @@
                             web3
                             tx-hash
                             (fn [_ receipt]
-                              (when receipt
+                              (when (:block-hash receipt)
                                 (dispatch [:web3-fx.contract/transaction-receipt-loaded
                                            [tx-hashes-db-path filter-db-path]
                                            tx-hash
