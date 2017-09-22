@@ -31,7 +31,7 @@ For example to create a new contract:
                    :from "0x6fce64667819c82a8bcbb78e294d7b444d2e1a29"}]
       {:web3-fx.blockchain/fns
        {:web3 w3
-        :fns [[cljs-web3.eth/contract-new abi tx-opts :contract-created :contract-create-error]
+        :fns [[cljs-web3.eth/contract-new abi tx-opts [:contract-created] [:contract-create-error]]
               ;; Alternatively, you can use map notation
               ;; Code below will do exactly same as above
               {:f cljs-web3.eth/contract-new
