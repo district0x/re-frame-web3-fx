@@ -1,4 +1,4 @@
-(defproject madvas.re-frame/web3-fx "0.1.12"
+(defproject madvas.re-frame/web3-fx "0.2.0"
   :description "A re-frame effects handler for performing Ethereum Web3 API tasks"
   :url "https://github.com/madvas/re-frame-web3-fx"
   :license {:name "MIT"}

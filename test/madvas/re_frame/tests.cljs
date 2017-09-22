@@ -83,7 +83,8 @@
       :watch? true
       :blockchain-filter-opts "latest"
       :db-path [:balances]
-      :dispatches [[:balance-loaded balance-ch] :balance-load-error]}}))
+      :on-success [:balance-loaded balance-ch]
+      :on-error [:balance-load-error]}}))
 
 (reg-event-fx
   :balance-loaded
@@ -96,7 +97,7 @@
   (fn [_ [_ coinbase-ch]]
     {:web3-fx.blockchain/fns
      {:web3 w3
-      :fns [[web3-eth/coinbase [:coinbase-loaded coinbase-ch] :coinbase-load-error]
+      :fns [[web3-eth/coinbase [:coinbase-loaded coinbase-ch] [:coinbase-load-error]]
             {:f web3-eth/coinbase
              :on-success [:coinbase-loaded coinbase-ch]
              :on-error [:coinbase-load-error]}]}}))
@@ -114,7 +115,8 @@
      {:web3 w3
       :db-path [:blockchain-filter]
       :blockchain-filter-opts "latest"
-      :dispatches [[:block-loaded filter-ch] :block-load-error]}}))
+      :on-success [:block-loaded filter-ch]
+      :on-error [:block-load-error]}}))
 
 (reg-event-fx
   :blockchain-filter-stop-watching
@@ -131,7 +133,7 @@
   :contract-constant-fns
   (fn [_ [_ contract result-ch]]
     {:web3-fx.contract/constant-fns
-     {:fns [[contract :multiply 9 [:multiply-loaded result-ch] :multiply-load-error]
+     {:fns [[contract :multiply 9 [:multiply-loaded result-ch] [:multiply-load-error]]
             {:instance contract
              :method :multiply
              :args [9]
@@ -197,7 +199,7 @@
     {:web3-fx.contract/events
      {:db db
       :db-path [:contract-events]
-      :events [[contract :on-c-changed {} "latest" [:on-c-changed result-ch] :on-c-changed-error]
+      :events [[contract :on-c-changed {} "latest" [:on-c-changed result-ch] [:on-c-changed-error]]
                {:instance contract
                 :event-id :custom-event-id
                 :event-name :on-c-changed

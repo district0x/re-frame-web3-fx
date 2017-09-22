@@ -8,7 +8,7 @@ This is [re-frame](https://github.com/Day8/re-frame) library, which contains sev
 ## Installation
 ```clojure
 ; Add to dependencies (requires re-frame >= v0.8.0)
-[madvas.re-frame/web3-fx "0.1.12"]
+[madvas.re-frame/web3-fx "0.2.0"]
 ```
 ```clojure
 (ns my.app
@@ -36,8 +36,8 @@ For example to create a new contract:
               ;; Code below will do exactly same as above
               {:f cljs-web3.eth/contract-new
                :args [abi tx-opts]
-               :on-success :contract-created
-               :on-error :contract-create-error}]}})))
+               :on-success [:contract-created]
+               :on-error [:contract-create-error]}]}})))
              
 (reg-event-fx
   :contract-created
@@ -56,7 +56,8 @@ Use this to setup blockchain [filter](https://github.com/ethereum/wiki/wiki/Java
      {:web3 web3
       :db-path [:some :path :to :blockchain-filter] ; This is where filter will be stored in your DB, so later can be stopped
       :blockchain-filter-opts "latest"
-      :dispatches [[:block-loaded some-param] :block-load-error] ; on-success and on-error dispatches 
+      :on-success [:block-loaded some-param]
+      :on-error [:block-load-error] 
       }}))
 ```
 
@@ -84,7 +85,8 @@ This one is to obtain balance from address(es). You can also pass `:watch? true`
       :blockchain-filter-opts {:from-block 0 :to-block "latest"}
       :instance erc20-token-instance ;; optional, pass if you want to load balances of some ERC20 token 
       :db-path [:balances]
-      :dispatches [:balance-loaded :balance-load-error]}}))
+      :on-success [:balance-loaded]
+      :on-error [:balance-load-error]}}))
       
 (reg-event-fx
   :balance-loaded
@@ -98,15 +100,15 @@ This one is to call your contract's constant methods (ones that doesn't change c
   :call-contract-constant-fns
   (fn [_ [_ contract-instance some-arg some-other-arg]]
     {:web3-fx.contract/constant-fns
-     {:fns [[contract-instance :some-method some-arg some-other-arg :some-method-result :some-method-error]
-            [contract-instance :multiply 9 6 :multiply-result :multiply-error]
+     {:fns [[contract-instance :some-method some-arg some-other-arg [:some-method-result] [:some-method-error]]
+            [contract-instance :multiply 9 6 [:multiply-result] [:multiply-error]]
             ;; Alternatively, you can use map notation
             ;; Code below will do exactly same as above
             {:instance contract-instance
              :method :multiply
              :args [9 6]
-             :on-success :multiply-result
-             :on-error :multiply-error}]}}))
+             :on-success [:multiply-result]
+             :on-error [:multiply-error]}]}}))
 ```
 #### :web3-fx.contract/state-fns
 This is to call state changing methods of your contract (ones you need to pay gas to execute). Again, first in `:fn` is kebab-cased name of contract method. Then goes args. After args you pass options related to transaction. Then we have 3 dispatches. First one is called right after user confirms transaction. Second one is called if user rejected transaction. And the last one is called after transaction has been processed by blockchain and [transaction receipt](https://github.com/ethereum/wiki/wiki/JavaScript-API#web3ethgettransactionreceipt) is available. To get a receipt, a blockchain filter needs to be setup. This library does it for you, but you need to provide `:db-path` where filter can be saved, for later removal. Note, getting transaction receipt is the only way, you can verify if your transaction didn't run out of gas or thrown error. Therefore it's essencial to always have callback for it.
@@ -120,7 +122,7 @@ This is to call state changing methods of your contract (ones you need to pay ga
         :db-path [:change-settings-fn]
         :fns [[contract-instance :change-settings 20 10 tx-opts
                [:change-settings-sent some-param]
-               :change-settings-error
+               [:change-settings-error]
                [:change-settings-transaction-receipt-loaded some-param]]
               ;; Alternatively, you can use map notation
               ;; Code below will do exactly same as above
@@ -129,7 +131,7 @@ This is to call state changing methods of your contract (ones you need to pay ga
                :args [20 10]
                :tx-opts tx-opts
                :on-success [:change-settings-sent some-param]
-               :on-error :change-settings-error
+               :on-error [:change-settings-error]
                :on-tx-receipt [:change-settings-transaction-receipt-loaded some-param]}]}})))
            
 (reg-event-fx
@@ -142,6 +144,19 @@ This is to call state changing methods of your contract (ones you need to pay ga
   (fn [_ [_ some-param transaction-receipt]]
     {}))
 ```
+
+#### :web3-fx.contract/add-transaction-hash-to-watch
+You can use this event to just wait for transaction receipt of some transaction you already have hash.
+(reg-event-fx
+  :contract-state-fn
+  (fn [_ [_ contract-instance some-param]]
+      {:web3-fx.contract/add-transaction-hash-to-watch
+       {:web3 web3
+        :db-path [:watched-transaction]
+        :transaction-hash "0x421a6808570b449d852227f979c8fc4f61f660ad95230908fbae5e0fbb90c9eb"
+        :on-tx-receipt [:change-settings-transaction-receipt-loaded some-param]}}))
+
+
 
 #### :web3-fx.contract/events
 With this, you setup listeners for contract events. Again, you need to pass `:db-path`, where listeners will be saved for later removal. First see how contract events are setup in JS: [Contract Events](https://github.com/ethereum/wiki/wiki/JavaScript-API#contract-events). Into `:events` you pass vector of vectors of events you want to listen to. 
@@ -162,9 +177,9 @@ If you pass same event id as already exists, old one will be stopped and new sta
   (fn [{:keys [db]} [_ contract-instance]]
     {:web3-fx.contract/events
      {:db-path [:contract-events]
-      :events [[contract-instance :on-settings-changed {} "latest" :on-settings-changed :on-settings-change-error]
-               [contract-instance :some-event-id-1 :on-some-event {:some-param 1} "latest" :on-some-event-success :on-some-event-error]
-               [contract-instance :some-event-id-2 :on-some-event {} {:from-block 0 :to-block 99} :on-some-event-success :on-some-event-error]
+      :events [[contract-instance :on-settings-changed {} "latest" [:on-settings-changed] [:on-settings-change-error]]
+               [contract-instance :some-event-id-1 :on-some-event {:some-param 1} "latest" [:on-some-event-success] [:on-some-event-error]]
+               [contract-instance :some-event-id-2 :on-some-event {} {:from-block 0 :to-block 99} [:on-some-event-success] [:on-some-event-error]]
                ;; Alternatively, you can use map notation
                ;; Code below will do exactly same as above
                {:instance contract-instance
@@ -172,8 +187,8 @@ If you pass same event id as already exists, old one will be stopped and new sta
                 :event-name :on-some-event
                 :event-filter-opts {}
                 :blockchain-filter-opts {:from-block 0 :to-block 99}
-                :on-success :on-some-event-success
-                :on-error :on-some-event-error}]}}))
+                :on-success [:on-some-event-success]
+                :on-error [:on-some-event-error]}]}}))
                
 (reg-event-fx
   :on-settings-changed

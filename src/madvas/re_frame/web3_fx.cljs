@@ -9,10 +9,7 @@
 
 (s/def ::instance (complement nil?))
 (s/def ::db-path (s/coll-of keyword?))
-(s/def ::dispatch (s/or :kw keyword?
-                        :sq sequential?))
-(s/def ::dispatches (s/cat :on-success ::dispatch
-                           :on-error ::dispatch))
+(s/def ::dispatch vector?)
 (s/def ::contract-fn-arg any?)
 (s/def ::addresses (s/coll-of string?))
 (s/def ::watch? boolean?)
@@ -30,12 +27,13 @@
 (s/def ::event-id any?)
 (s/def ::event-filter-opts (s/nilable map?))
 (s/def ::blockchain-filter-opts blockchain-filter-opts?)
+(s/def ::transaction-hash string?)
 
 (s/def :web3-fx.blockchain/fns
   (s/coll-of (s/nilable (s/or :params (s/cat :f fn?
                                              :args (s/* any?)
-                                             :on-success ::dispatch
-                                             :on-error ::dispatch)
+                                             :on-success ::on-success
+                                             :on-error ::on-error)
                               :params (s/keys :req-un [::f]
                                               :opt-un [::args ::on-success ::on-error])))))
 
@@ -74,20 +72,13 @@
 
 (s/def ::contract-events (s/keys :req-un [::events ::db-path]))
 (s/def ::contract-events-stop-watching (s/keys :req-un [::event-ids ::db-path]))
-
 (s/def ::contract-constant-fns (s/keys :req-un [:web3-fx.contract.constant/fns]))
 (s/def ::contract-state-fns (s/keys :req-un [::web3 :web3-fx.contract.state/fns ::db-path]))
+(s/def ::add-transaction-hash-to-watch (s/keys :req-un [::web3 ::db-path ::transaction-hash ::on-tx-receipt]))
 (s/def ::blockchain-fns (s/keys :req-un [::web3 :web3-fx.blockchain/fns]))
-(s/def ::balances (s/keys :req-un [::addresses ::dispatches ::web3]
+(s/def ::balances (s/keys :req-un [::addresses ::on-success ::on-error ::web3]
                           :opt-un [::watch? ::db-path ::blockchain-filter-opts ::instance]))
-(s/def ::blockchain-filter (s/keys :req-un [::db-path ::dispatches ::web3 ::blockchain-filter-opts]))
-
-(defn- dispatch-vec [dispatch-conformed & args]
-  (let [{:keys [kw sq]} (apply hash-map dispatch-conformed)]
-    (vec (concat (or sq [kw]) args))))
-
-(defn- dispatch-call [& args]
-  (dispatch (apply dispatch-vec args)))
+(s/def ::blockchain-filter (s/keys :req-un [::db-path ::on-success ::on-error ::web3 ::blockchain-filter-opts]))
 
 (defn- ensure-filter-params [event]
   (if (:event-id event)
@@ -97,14 +88,14 @@
 (defn- dispach-fn [on-success on-error & args]
   (fn [err res]
     (if err
-      (apply dispatch-call on-error (cons err args))
-      (apply dispatch-call on-success (cons res args)))))
+      (dispatch (vec (concat on-error (cons err args))))
+      (dispatch (vec (concat on-success (cons res args)))))))
 
 (defn- contract-event-dispach-fn [on-success on-error]
   (fn [err res]
     (if err
-      (dispatch-call on-error err)
-      (dispatch-call on-success (:args res) res))))
+      (dispatch (vec (concat on-error [err])))
+      (dispatch (vec (concat on-success [(:args res) res]))))))
 
 (reg-event-db
   :web3-fx.contract/assoc-event-filters
@@ -193,7 +184,7 @@
   (fn [{:keys [db]} [_ [tx-hashes-db-path filter-db-path] transaction-hash receipt on-transaction-receipt]]
     (when (get-in db (conj tx-hashes-db-path transaction-hash))
       (let [rest-tx-hashes (dissoc (get-in db tx-hashes-db-path) transaction-hash)]
-        {:dispatch (dispatch-vec on-transaction-receipt receipt)
+        {:dispatch (vec (concat on-transaction-receipt [receipt]))
          :db (cond-> db
                (empty? rest-tx-hashes)
                (remove-blockchain-filter! filter-db-path)
@@ -203,10 +194,12 @@
 
 (reg-event-db
   :web3-fx.contract/add-transaction-hash-to-watch
-  (fn [db [_ web3 db-path transaction-hash on-transaction-receipt]]
+  (fn [db [_ {:keys [web3 db-path transaction-hash on-tx-receipt] :as args}]]
+    (when-not (s/valid? ::add-transaction-hash-to-watch args)
+      (console :error (s/explain-str ::add-transaction-hash-to-watch args)))
     (let [tx-hashes-db-path (conj db-path :transaction-hashes)
           filter-db-path (conj db-path :filter)
-          all-tx-hashes (assoc (get-in db tx-hashes-db-path) transaction-hash on-transaction-receipt)]
+          all-tx-hashes (assoc (get-in db tx-hashes-db-path) transaction-hash on-tx-receipt)]
 
       (remove-blockchain-filter! db filter-db-path)
 
@@ -231,15 +224,18 @@
 
         (assoc-in tx-hashes-db-path all-tx-hashes)))))
 
-(defn- create-state-fn-callback [web3 db-path on-success on-error on-transaction-receipt]
+(defn- create-state-fn-callback [web3 db-path on-success on-error on-tx-receipt]
   (fn [err transaction-hash]
     (if err
-      (dispatch-call on-error err)
+      (dispatch (conj on-error err))
       (do
         transaction-hash
-        (dispatch-call on-success transaction-hash)
+        (dispatch (conj on-success transaction-hash))
         (dispatch [:web3-fx.contract/add-transaction-hash-to-watch
-                   web3 db-path transaction-hash on-transaction-receipt])))))
+                   {:web3 web3
+                    :db-path db-path
+                    :transaction-hash transaction-hash
+                    :on-tx-receipt on-tx-receipt}])))))
 
 (reg-fx
   :web3-fx.contract/state-fns
@@ -281,7 +277,7 @@
               blockchain-filter-opts
               (fn [err _]
                 (if err
-                  (dispatch [on-error err])
+                  (dispatch (conj on-error err))
                   (doseq [address all-addresses]
                     (web3-eth/get-balance web3 address (dispach-fn on-success on-error address))))))]
 
@@ -299,12 +295,12 @@
               address
               [:web3-fx.blockchain.erc20/balance-loaded {:address address
                                                          :on-success on-success}]
-              (dispatch-vec on-error address)])}}))
+              (conj on-error address)])}}))
 
 (reg-event-fx                                               ;; To keep it consisted with eth balance result order
   :web3-fx.blockchain.erc20/balance-loaded
   (fn [db [_ {:keys [address on-success]} balance]]
-    {:dispatch (dispatch-vec on-success balance address)}))
+    {:dispatch (vec (concat on-success [balance address]))}))
 
 (reg-event-fx
   ;; Instead of setting up 2 events per address, would be better to use web3 topic filtering, but didn't work when I tried
@@ -323,13 +319,13 @@
                                {:from address}
                                blockchain-filter-opts
                                disp
-                               (dispatch-vec on-error address)]
+                               (conj on-error address)]
                               [instance (str base-event-id "-transfer-to")
                                :Transfer
                                {:to address}
                                blockchain-filter-opts
                                disp
-                               (dispatch-vec on-error address)]])))}}))))
+                               (conj on-error address)]])))}}))))
 
 (reg-event-fx
   :web3-fx.blockchain.erc20/on-transfer
@@ -338,23 +334,22 @@
 
 (reg-fx
   :web3-fx.blockchain/balances
-  (fn [{:keys [addresses web3 dispatches watch? db-path blockchain-filter-opts instance] :as config}]
+  (fn [{:keys [addresses web3 on-success on-error watch? db-path blockchain-filter-opts instance] :as config}]
     (s/assert ::balances config)
-    (let [{:keys [on-success on-error] :as dispatches-conformed} (s/conform ::dispatches dispatches)]
+    (if-not instance
+      (doseq [address addresses]
+        (web3-eth/get-balance web3 address (dispach-fn on-success on-error address)))
+      (dispatch [:web3-fx.blockchain.erc20/balances-of config]))
+    (when (and watch? (seq addresses))
       (if-not instance
-        (doseq [address addresses]
-          (web3-eth/get-balance web3 address (dispach-fn on-success on-error address)))
-        (dispatch [:web3-fx.blockchain.erc20/balances-of (merge config dispatches-conformed)]))
-      (when (and watch? (seq addresses))
-        (if-not instance
-          (dispatch [:web3-fx.blockchain/add-addresses-to-watch
-                     web3
-                     db-path
-                     addresses
-                     blockchain-filter-opts
-                     on-success
-                     on-error])
-          (dispatch [:web3-fx.blockchain.erc20/add-addresses-to-watch (merge config dispatches-conformed)]))))))
+        (dispatch [:web3-fx.blockchain/add-addresses-to-watch
+                   web3
+                   db-path
+                   addresses
+                   blockchain-filter-opts
+                   on-success
+                   on-error])
+        (dispatch [:web3-fx.blockchain.erc20/add-addresses-to-watch config])))))
 
 (reg-event-db
   :web3-fx.blockchain/add-filter
@@ -369,8 +364,8 @@
             blockchain-filter-opts
             (fn [err res]
               (if err
-                (dispatch-call on-error err)
-                (dispatch-call on-success res))))]
+                (dispatch (conj on-error err))
+                (dispatch (conj on-success res)))))]
       (assoc-in db db-path blockchain-filter))))
 
 (reg-event-db
@@ -381,10 +376,9 @@
 
 (reg-fx
   :web3-fx.blockchain/filter
-  (fn [{:keys [web3 db-path blockchain-filter-opts dispatches] :as config}]
+  (fn [{:keys [web3 db-path blockchain-filter-opts on-success on-error] :as config}]
     (s/assert ::blockchain-filter config)
-    (let [{:keys [on-success on-error]} (s/conform ::dispatches dispatches)]
-      (dispatch [:web3-fx.blockchain/add-filter web3 db-path blockchain-filter-opts on-success on-error]))))
+    (dispatch [:web3-fx.blockchain/add-filter web3 db-path blockchain-filter-opts on-success on-error])))
 
 (reg-fx
   :web3-fx.blockchain/filter-stop-watching
