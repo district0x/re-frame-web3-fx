@@ -293,14 +293,15 @@
              [instance
               :balance-of
               address
-              [:web3-fx.blockchain.erc20/balance-loaded {:address address
+              [:web3-fx.blockchain.erc20/balance-loaded {:address    address
+                                                         :instance   instance
                                                          :on-success on-success}]
               (conj on-error address)])}}))
 
 (reg-event-fx                                               ;; To keep it consisted with eth balance result order
   :web3-fx.blockchain.erc20/balance-loaded
-  (fn [db [_ {:keys [address on-success]} balance]]
-    {:dispatch (vec (concat on-success [balance address]))}))
+  (fn [db [_ {:keys [address instance on-success]} balance]]
+    {:dispatch (vec (concat on-success [balance address instance]))}))
 
 (reg-event-fx
   ;; Instead of setting up 2 events per address, would be better to use web3 topic filtering, but didn't work when I tried

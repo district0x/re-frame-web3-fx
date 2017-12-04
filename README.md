@@ -90,7 +90,7 @@ This one is to obtain balance from address(es). You can also pass `:watch? true`
       
 (reg-event-fx
   :balance-loaded
-  (fn [_ [_ balance address]]
+  (fn [_ [_ balance address contract-instance]]
     {}))
 ```
 #### :web3-fx.contract/constant-fns
