@@ -100,7 +100,7 @@
 (reg-event-db
   :web3-fx.contract/assoc-event-filters
   (fn [db [_ filters-db-path filters]]
-    (assoc-in db filters-db-path filters)))
+    (update db filters-db-path merge filters)))
 
 (defn- event-stop-watching! [db db-path event-id]
   (when-let [event-filter (get-in db (conj db-path event-id))]
