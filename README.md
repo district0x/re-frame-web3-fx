@@ -147,6 +147,7 @@ This is to call state changing methods of your contract (ones you need to pay ga
 
 #### :web3-fx.contract/add-transaction-hash-to-watch
 You can use this event to just wait for transaction receipt of some transaction you already have hash.
+```clojure
 (reg-event-fx
   :contract-state-fn
   (fn [_ [_ contract-instance some-param]]
@@ -155,6 +156,7 @@ You can use this event to just wait for transaction receipt of some transaction 
         :db-path [:watched-transaction]
         :transaction-hash "0x421a6808570b449d852227f979c8fc4f61f660ad95230908fbae5e0fbb90c9eb"
         :on-tx-receipt [:change-settings-transaction-receipt-loaded some-param]}}))
+```
 
 
 
