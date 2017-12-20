@@ -13,7 +13,7 @@ This is [re-frame](https://github.com/Day8/re-frame) library, which contains sev
 ```clojure
 (ns my.app
   (:require [cljsjs.web3] ; You only need this, if you don't use MetaMask extension or Mist browser
-            [madvas.re-frame.web3-fx])
+            [madvas.re-frame.web3-fx]))
 ```
 
 ## Usage
