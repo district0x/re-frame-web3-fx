@@ -155,7 +155,7 @@ You can use this event to just wait for transaction receipt of some transaction 
        {:web3 web3
         :db-path [:watched-transaction]
         :transaction-hash "0x421a6808570b449d852227f979c8fc4f61f660ad95230908fbae5e0fbb90c9eb"
-        :on-tx-receipt [:change-settings-transaction-receipt-loaded some-param]}}))
+        :on-tx-receipt [:transaction-receipt-loaded some-param]}}))
 ```
 
 
