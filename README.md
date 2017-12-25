@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/district0x/re-frame-web3-fx.svg?branch=master)](https://travis-ci.org/district0x/re-frame-web3-fx)
 
-[re-frame](https://github.com/Day8/re-frame) [Effect Handlers](https://github.com/Day8/re-frame/tree/develop/docs) to work with [Ethereum](https://ethereum.org/) blockchain [Web3 API](https://github.com/ethereum/wiki/wiki/JavaScript-API), using [cljs-web3](https://github.com/madvas/cljs-web3)
+[re-frame](https://github.com/Day8/re-frame) [Effectful Handlers](https://github.com/Day8/re-frame/blob/develop/docs/EffectfulHandlers.md) to work with [Ethereum](https://ethereum.org/) blockchain [Web3 API](https://github.com/ethereum/wiki/wiki/JavaScript-API), using [cljs-web3](https://github.com/madvas/cljs-web3)
 
 ## Installation
 Add `[district0x.re-frame/web3-fx "1.0.0"]` into your project.clj  
