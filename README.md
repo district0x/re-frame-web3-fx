@@ -5,7 +5,7 @@
 [re-frame](https://github.com/Day8/re-frame) [Effectful Handlers](https://github.com/Day8/re-frame/blob/develop/docs/EffectfulHandlers.md) to work with [Ethereum](https://ethereum.org/) blockchain [Web3 API](https://github.com/ethereum/wiki/wiki/JavaScript-API), using [cljs-web3](https://github.com/madvas/cljs-web3)
 
 ## Installation
-Add `[district0x.re-frame/web3-fx "1.0.0"]` into your project.clj  
+Add `[district0x.re-frame/web3-fx "1.0.1"]` into your project.clj  
 Include `[district0x.re-frame.web3-fx]` in your CLJS file
 
 ```clojure
@@ -86,7 +86,6 @@ Getting and watching balance or Ether:
                                       {:id (str "balance-" address) ;; If you watch?, pass :id so you can stop watching later
                                        :address address
                                        :watch? true
-                                       :block-filter-opts "latest"
                                        :on-success [::ether-balance-loaded address]
                                        :on-error [::error]})}}))
 ```
@@ -101,7 +100,6 @@ Getting and watching balance of a ERC20 Token. Notice you need to pass `:instanc
                                        :address address
                                        :instance (:token-contract-instance db)
                                        :watch? true
-                                       :block-filter-opts "latest"
                                        :on-success [::token-balance-loaded address]
                                        :on-error [::error]})}}))
 ```

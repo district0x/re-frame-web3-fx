@@ -198,7 +198,6 @@
                                        :address address
                                        :instance (contract db)
                                        :watch? true
-                                       :block-filter-opts "latest"
                                        :on-success [::token-balance-loaded address]
                                        :on-error [::error]})}}))
 
@@ -239,7 +238,6 @@
                                       {:id :token-balances
                                        :address address
                                        :watch? true
-                                       :block-filter-opts "latest"
                                        :on-success [::ether-balance-loaded address]
                                        :on-error [::error]})}}))
 

@@ -216,7 +216,7 @@
   :web3/get-balances
   (fn [{:keys [:addresses :web3] :as params}]
     (s/assert ::get-balances params)
-    (doseq [{:keys [:address :on-success :on-error :watch? :block-filter-opts :instance :id]} addresses]
+    (doseq [{:keys [:address :on-success :on-error :watch? :instance :id]} addresses]
 
       (if-not instance
         (web3-eth/get-balance web3 address (dispach-fn on-success on-error))
@@ -227,7 +227,7 @@
           (start-listener!
             {:web3 web3
              :id id
-             :block-filter-opts block-filter-opts
+             :block-filter-opts "latest"
              :callback (fn [err]
                          (when-not err
                            (web3-eth/get-balance web3 address (dispach-fn on-success on-error))))})
@@ -237,7 +237,7 @@
                :id id
                :event :Transfer
                :event-filter-opts {:from address}
-               :block-filter-opts block-filter-opts
+               :block-filter-opts "latest"
                :callback (fn []
                            (web3-eth/contract-call instance :balance-of address (dispach-fn on-success on-error)))})
             (start-event-listener!
@@ -245,7 +245,7 @@
                :id id
                :event :Transfer
                :event-filter-opts {:to address}
-               :block-filter-opts block-filter-opts
+               :block-filter-opts "latest"
                :callback (fn []
                            (web3-eth/contract-call instance :balance-of address (dispach-fn on-success on-error)))})))))))
 
