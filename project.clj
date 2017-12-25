@@ -1,35 +1,30 @@
-(defproject madvas.re-frame/web3-fx "0.2.3"
+(defproject district0x.re-frame/web3-fx "1.0.0"
   :description "A re-frame effects handler for performing Ethereum Web3 API tasks"
-  :url "https://github.com/madvas/re-frame-web3-fx"
+  :url "https://github.com/district0x/re-frame-web3-fx"
   :license {:name "MIT"}
-  :dependencies [[org.clojure/clojurescript "1.9.671"]
-                 [cljs-web3 "0.19.0-0-7"]
-                 [re-frame "0.8.0"]]
+  :dependencies [[org.clojure/clojurescript "1.9.946"]
+                 [cljs-web3 "0.19.0-0-9"]
+                 [re-frame "0.10.2"]]
 
-  :plugins [[lein-cljsbuild "1.1.4"]]
+  :doo {:paths {:karma "./node_modules/karma/bin/karma"}}
 
-  :figwheel {:server-port 6963}
+  :npm {:devDependencies [[karma "1.7.1"]
+                          [karma-chrome-launcher "2.2.0"]
+                          [karma-cli "1.0.1"]
+                          [karma-cljs-test "0.1.0"]]}
 
-  :repl-options {:nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
-  :resource-paths []
+  :profiles {:dev {:dependencies [[org.clojure/clojure "1.8.0"]
+                                  [com.cemerick/piggieback "0.2.2"]
+                                  [org.clojure/tools.nrepl "0.2.13"]
+                                  [day8.re-frame/test "0.1.5"]
+                                  [org.clojure/core.async "0.3.465"]]
+                   :plugins [[lein-cljsbuild "1.1.7"]
+                             [lein-doo "0.1.8"]
+                             [lein-npm "0.6.2"]]}}
 
-  :profiles {:dev
-             {:dependencies [[org.clojure/clojure "1.8.0"]
-                             [binaryage/devtools "0.8.1"]
-                             [com.cemerick/piggieback "0.2.1"]
-                             [figwheel-sidecar "0.5.8"]
-                             [org.clojure/tools.nrepl "0.2.11"]]
-              :plugins [[lein-figwheel "0.5.8"]]
-              :source-paths ["env/dev"]
-              :resource-paths ["resources"]
-              :cljsbuild {:builds [{:id "dev"
-                                    :source-paths ["src" "test"]
-                                    :figwheel {:on-jsload madvas.re-frame.test-runner/run}
-                                    :compiler {:main madvas.re-frame.test-runner
-                                               :output-to "resources/public/js/compiled/app.js"
-                                               :output-dir "resources/public/js/compiled/out"
-                                               :asset-path "/js/compiled/out"
-                                               :source-map-timestamp true
-                                               :optimizations :none
-                                               :preloads [print.foo.preloads.devtools]
-                                               }}]}}})
+  :cljsbuild {:builds [{:id "tests"
+                        :source-paths ["src" "test"]
+                        :compiler {:output-to "tests-output/tests.js"
+                                   :output-dir "tests-output"
+                                   :main "tests.runner"
+                                   :optimizations :none}}]})

@@ -1,0 +1,11 @@
+language: clojure
+script: lein doo chrome "tests" once
+addons:
+  chrome: stable
+before_script:
+  - export DISPLAY=:99.0
+  - sh -e /etc/init.d/xvfb start
+  - "echo 'Installing Ganache'"
+  - npm install -g ganache-cli
+  - "echo 'Running Ganache'"
+  - ganache-cli -p 8549 > /dev/null &

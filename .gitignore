@@ -12,3 +12,6 @@ pom.xml.asc
 .idea
 /resources/public/js/
 /figwheel_server.log
+/node_modules/
+/tests-output/
+/web3-fx.iml

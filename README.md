@@ -1,215 +1,185 @@
 # re-frame-web3-fx
 
-This is [re-frame](https://github.com/Day8/re-frame) library, which contains several [Effect Handlers](https://github.com/Day8/re-frame/tree/develop/docs) for working with [Ethereum](https://ethereum.org/) blockchain [Web3 API](https://github.com/ethereum/wiki/wiki/JavaScript-API), using under the hood clojurescript interop library [cljs-web3](https://github.com/madvas/cljs-web3)
+[![Build Status](https://travis-ci.org/district0x/re-frame-web3-fx.svg?branch=master)](https://travis-ci.org/district0x/re-frame-web3-fx)
 
-## See also
-* [How to create decentralised apps with Clojurescript re-frame and Ethereum](https://medium.com/@matus.lestan/how-to-create-decentralised-apps-with-clojurescript-re-frame-and-ethereum-81de24d72ff5#.kul24x62l)
+[re-frame](https://github.com/Day8/re-frame) [Effect Handlers](https://github.com/Day8/re-frame/tree/develop/docs) to work with [Ethereum](https://ethereum.org/) blockchain [Web3 API](https://github.com/ethereum/wiki/wiki/JavaScript-API), using [cljs-web3](https://github.com/madvas/cljs-web3)
 
 ## Installation
-```clojure
-; Add to dependencies (requires re-frame >= v0.8.0)
-[madvas.re-frame/web3-fx "0.2.3"]
-```
+Add `[district0x.re-frame/web3-fx "1.0.0"]` into your project.clj  
+Include `[district0x.re-frame.web3-fx]` in your CLJS file
+
 ```clojure
 (ns my.app
   (:require [cljsjs.web3] ; You only need this, if you don't use MetaMask extension or Mist browser
-            [madvas.re-frame.web3-fx]))
+            [district0x.re-frame.web3-fx]))
 ```
+
+## Breaking changes 0.2.3 -> 1.0.0
+This library was completely rewritten on version upgrade 0.2.3 -> 1.0.0. API was greatly changed (simplified). 
+Reasons for breakage were also unerlying changes in Ethereum (fork to Byzantium) and preparations for web3 1.0.0.  
+I deeply appologize, but this was absolutely necessary. 
+
 
 ## Usage
 Following effect handlers are available:
-#### :web3-fx.blockchain/fns
-Use this to call any function from [cljs-web3](https://github.com/madvas/cljs-web3), which expects callback.
-To `:fns` pass vector of vectors, describing which functions + args you want to call, last two items passed are on-success and on-error dispatch. Dispatches can always be one keyword or a vector as you'd pass to re-frame's `dispatch`. Note, you don't need to pass web3 object as a function arg to each function.
-For example to create a new contract:
+#### :web3/call
+Use it to call any function from [cljs-web3](https://github.com/madvas/cljs-web3) or any smart contract function.
+Calling [cljs-web3](https://github.com/madvas/cljs-web3) function:
 ```clojure
 (reg-event-fx
-  :create-contract
-  (fn [_ [_ abi bin]]
-    (let [tx-opts {:data bin
-                   :gas 4500000
-                   :from "0x6fce64667819c82a8bcbb78e294d7b444d2e1a29"}]
-      {:web3-fx.blockchain/fns
-       {:web3 w3
-        :fns [[cljs-web3.eth/contract-new abi tx-opts [:contract-created] [:contract-create-error]]
-              ;; Alternatively, you can use map notation
-              ;; Code below will do exactly same as above
-              {:f cljs-web3.eth/contract-new
-               :args [abi tx-opts]
-               :on-success [:contract-created]
-               :on-error [:contract-create-error]}]}})))
-             
-(reg-event-fx
-  :contract-created
-  (fn [_ [_ Contract]]
-    (.log js/console Contract)
-    {}))          
+  ::load-accounts
+  (fn [{:keys [:db]} []]
+    {:web3/call {:web3 (:web3 db)
+                 :fns [{:fn cljs-web3.eth/accounts
+                        :args []
+                        :on-success [::accounts-loaded]
+                        :on-error [::error]}]}}))
 ```
+Calling **constant** smart-contract function. In this case getting total supply of a ERC20 Token:
+```clojure
+(reg-event-fx
+  ::get-token-total-supply
+  (fn [{:keys [:db]}]
+    {:web3/call {:web3 (:web3 db)
+                 :fns [{:instance (:token-contract-instance db)
+                        :fn :total-supply
+                        :on-success [::token-total-supply-result]
+                        :on-error [::error]}]}}))
+```
+Calling **state changing** smart-contract function, aka sending a transaction to the network. In this case calling `mint`
+function of MintableToken. Notice there's not `on-success`, `on-error`. Given callbacks are executed at following situations: 
+* `:on-tx-hash` When tx is successfully sent to the network. Receives tx-hash in parameters.
+* `:on-tx-hash-error` When tx wasn't send to the network. Usually user rejected to sign. Receives tx-hash in parameters.
+* `:on-tx-success` When tx was processed without error. Receives receipt in parameters. 
+* `:on-tx-failed` When there was an error during processing a transaction. Receives receipt in parameters.
+* `:on-tx-receipt` General callback when tx was processed. Either with error or not. Receives receipt in parameters.
+(You don't need to use all of them, only ones you need)
 
-#### :web3-fx.blockchain/filter
-Use this to setup blockchain [filter](https://github.com/ethereum/wiki/wiki/JavaScript-API#web3ethfilter) as you'd have done with `web3.eth.filter(options, callback);` in JS.
 ```clojure
 (reg-event-fx
-  :start-blockchain-filter
-  (fn [_ [_ some-param]]
-    {:web3-fx.blockchain/filter
-     {:web3 web3
-      :db-path [:some :path :to :blockchain-filter] ; This is where filter will be stored in your DB, so later can be stopped
-      :blockchain-filter-opts "latest"
-      :on-success [:block-loaded some-param]
-      :on-error [:block-load-error] 
-      }}))
-```
-
-#### :web3-fx.blockchain/filter-stop-watching
-This is to stop previously setup filter
-```clojure
-(reg-event-fx
-  :stop-blockchain-filter
-  (fn []
-    {:web3-fx.blockchain/filter-stop-watching [:some :path :to :blockchain-filter]}))
-```
-#### :web3-fx.blockchain/balances
-This one is to obtain balance from address(es). You can also pass `:watch? true` and it will setup blockchain filter and calling your dispatch with a new balance after every new block. When you pass `:watch? true` you must also provide `:db-path` so filter can be saved.
-
-**Pro Tip:** You can add optional `:instance` with instance or an arbitrary [ERC20](https://github.com/ethereum/EIPs/issues/20) token to load & watch balances of that token!
-```clojure
-(reg-event-fx
-  :get-balances
-  (fn []
-    {:web3-fx.blockchain/balances
-     {:web3 web3
-      :addresses ["0x6fce64667819c82a8bcbb78e294d7b444d2e1a29"
-                  "0xe206f52728e2c1e23de7d42d233f39ac2e748977"]
-      :watch? true
-      :blockchain-filter-opts {:from-block 0 :to-block "latest"}
-      :instance erc20-token-instance ;; optional, pass if you want to load balances of some ERC20 token 
-      :db-path [:balances]
-      :on-success [:balance-loaded]
-      :on-error [:balance-load-error]}}))
-      
-(reg-event-fx
-  :balance-loaded
-  (fn [_ [_ balance address contract-instance]]
-    {}))
-```
-#### :web3-fx.contract/constant-fns
-This one is to call your contract's constant methods (ones that doesn't change contract state and can return value). Method name is passed as kebab-cased keyword, then goes arguments, and last 2 items are on-success and on-error dispatches.
-```clojure
-(reg-event-fx
-  :call-contract-constant-fns
-  (fn [_ [_ contract-instance some-arg some-other-arg]]
-    {:web3-fx.contract/constant-fns
-     {:fns [[contract-instance :some-method some-arg some-other-arg [:some-method-result] [:some-method-error]]
-            [contract-instance :multiply 9 6 [:multiply-result] [:multiply-error]]
-            ;; Alternatively, you can use map notation
-            ;; Code below will do exactly same as above
-            {:instance contract-instance
-             :method :multiply
-             :args [9 6]
-             :on-success [:multiply-result]
-             :on-error [:multiply-error]}]}}))
-```
-#### :web3-fx.contract/state-fns
-This is to call state changing methods of your contract (ones you need to pay gas to execute). Again, first in `:fn` is kebab-cased name of contract method. Then goes args. After args you pass options related to transaction. Then we have 3 dispatches. First one is called right after user confirms transaction. Second one is called if user rejected transaction. And the last one is called after transaction has been processed by blockchain and [transaction receipt](https://github.com/ethereum/wiki/wiki/JavaScript-API#web3ethgettransactionreceipt) is available. To get a receipt, a blockchain filter needs to be setup. This library does it for you, but you need to provide `:db-path` where filter can be saved, for later removal. Note, getting transaction receipt is the only way, you can verify if your transaction didn't run out of gas or thrown error. Therefore it's essencial to always have callback for it.
-```clojure
-(reg-event-fx
-  :contract-state-fn
-  (fn [_ [_ contract-instance some-param]]
-    (let [tx-opts {:gas 4500000 :from "0xe206f52728e2c1e23de7d42d233f39ac2e748977"}]
-      {:web3-fx.contract/state-fns
-       {:web3 web3
-        :db-path [:change-settings-fn]
-        :fns [[contract-instance :change-settings 20 10 tx-opts
-               [:change-settings-sent some-param]
-               [:change-settings-error]
-               [:change-settings-transaction-receipt-loaded some-param]]
-              ;; Alternatively, you can use map notation
-              ;; Code below will do exactly same as above
-              {:instance contract-instance
-               :method :change-settings
-               :args [20 10]
-               :tx-opts tx-opts
-               :on-success [:change-settings-sent some-param]
-               :on-error [:change-settings-error]
-               :on-tx-receipt [:change-settings-transaction-receipt-loaded some-param]}]}})))
-           
-(reg-event-fx
-  :chainge-settings-sent
-  (fn [_ [_  some-param transaction-hash]]
-    {}))
-
-(reg-event-fx
-  :change-settings-transaction-receipt-loaded
-  (fn [_ [_ some-param transaction-receipt]]
-    {}))
-```
-
-#### :web3-fx.contract/add-transaction-hash-to-watch
-You can use this event to just wait for transaction receipt of some transaction you already have hash.
-```clojure
-(reg-event-fx
-  :contract-state-fn
-  (fn [_ [_ contract-instance some-param]]
-      {:web3-fx.contract/add-transaction-hash-to-watch
-       {:web3 web3
-        :db-path [:watched-transaction]
-        :transaction-hash "0x421a6808570b449d852227f979c8fc4f61f660ad95230908fbae5e0fbb90c9eb"
-        :on-tx-receipt [:transaction-receipt-loaded some-param]}}))
+  ::mint-token
+  (fn [{:keys [:db]} [_ {:keys [:to :amount :from]}]]
+    {:web3/call {:web3 (:web3 db)
+                 :fns [{:instance (:token-contract-instance db)
+                        :fn :mint
+                        :args [to amount]
+                        :tx-opts {:from from
+                                  :gas 4500000}
+                        :on-tx-hash [::tx-send-success]      
+                        :on-tx-hash-error [::tx-send-failed] 
+                        :on-tx-success [::token-minted]
+                        :on-tx-error [::tx-failed]
+                        :on-tx-receipt [::tx-receipt-loaded]}]}}))
 ```
 
 
-
-#### :web3-fx.contract/events
-With this, you setup listeners for contract events. Again, you need to pass `:db-path`, where listeners will be saved for later removal. First see how contract events are setup in JS: [Contract Events](https://github.com/ethereum/wiki/wiki/JavaScript-API#contract-events). Into `:events` you pass vector of vectors of events you want to listen to. 
-Event vector can consist of 5 or 6 items:
+#### :web3/get-balances
+Gets balance of Ether or ERC20 token. Optionally you can pass `:watch? true`, so the callback will be fired everytime
+balance changes. 
+Getting and watching balance or Ether:
 ```clojure
-[contract-instance ; Your contract instance
-event-filter-id ; (optional) Uniquely identifies filter, so it can be stopped later
-event-name ; kebab-cased event name as in your contract. If you don't provide event-filter-id, this will be used as that.
-filter-opts ; Filter events by indexed param
-blockchain-filter-opts ; Filter events by blockchain opts
-on-success
-on-error]
+(reg-event-fx
+  ::load-ether-balances
+  (fn [{:keys [:db]} [_ addresses]]
+    {:web3/get-balances {:web3 (:web3 db)
+                         :addresses (for [address addresses]
+                                      {:id (str "balance-" address) ;; If you watch?, pass :id so you can stop watching later
+                                       :address address
+                                       :watch? true
+                                       :block-filter-opts "latest"
+                                       :on-success [::ether-balance-loaded address]
+                                       :on-error [::error]})}}))
 ```
-If you pass same event id as already exists, old one will be stopped and new started. 
+Getting and watching balance of a ERC20 Token. Notice you need to pass `:instance` of a ERC20 contract
 ```clojure
 (reg-event-fx
-  :contract-events
-  (fn [{:keys [db]} [_ contract-instance]]
-    {:web3-fx.contract/events
-     {:db-path [:contract-events]
-      :events [[contract-instance :on-settings-changed {} "latest" [:on-settings-changed] [:on-settings-change-error]]
-               [contract-instance :some-event-id-1 :on-some-event {:some-param 1} "latest" [:on-some-event-success] [:on-some-event-error]]
-               [contract-instance :some-event-id-2 :on-some-event {} {:from-block 0 :to-block 99} [:on-some-event-success] [:on-some-event-error]]
-               ;; Alternatively, you can use map notation
-               ;; Code below will do exactly same as above
-               {:instance contract-instance
-                :event-id :some-event-id-2
-                :event-name :on-some-event
-                :event-filter-opts {}
-                :blockchain-filter-opts {:from-block 0 :to-block 99}
-                :on-success [:on-some-event-success]
-                :on-error [:on-some-event-error]}]}}))
-               
-(reg-event-fx
-  :on-settings-changed
-  (fn [_ [_ new-settings]]
-    {}))
-```
-#### :web3-fx.contract/events-stop-watching
-This way you can stop previously setup event listeners.
-```clojure
-(reg-event-fx
-  :contract-events-stop-watching
-  (fn [{:keys [db]} _]
-    {:web3-fx.contract/events-stop-watching
-     {:db-path [:contract-events]
-      :event-ids [:on-settings-changed :some-event-id-1]}}))
+  ::load-token-balances
+  (fn [{:keys [:db]} [_ addresses]]
+    {:web3/get-balances {:web3 (:web3 db)
+                         :addresses (for [address addresses]
+                                      {:id (str "balance-" address) ;; If you watch?, pass :id so you can stop watching later
+                                       :address address
+                                       :instance (:token-contract-instance db)
+                                       :watch? true
+                                       :block-filter-opts "latest"
+                                       :on-success [::token-balance-loaded address]
+                                       :on-error [::error]})}}))
 ```
 
-## DAPPS using re-frame-web3-fx
-* [emojillionaire](https://github.com/madvas/emojillionaire)
-* [ethlance](https://github.com/madvas/ethlance)
+#### :web3/watch-events
+Listens to smart-contract events. Callback receives event `:args` as first param and complete event data as second.
+In this example we watch Mint event of MintableToken
+```clojure
+(reg-event-fx
+  ::watch-mint
+  (fn [{:keys [:db]} [_ {:keys [:to]}]]
+    {:web3/watch-events {:events [{:id :mint-watcher
+                                   :event :Mint
+                                   :instance (:token-contract-instance db)
+                                   :block-filter-opts {:from-block 0 :to-block "latest"}
+                                   :event-filter-opts {:to to}
+                                   :on-success [::token-mint-event]
+                                   :on-error [::error]}]}}))
+```
+
+#### :web3/watch-transactions
+Sets up listener until transaction receipt is available. Callbacks are fired same way as in `:web3/call` for 
+state-changing contract functions. 
+
+```clojure
+(reg-event-fx
+  ::watch-transaction
+  interceptors
+  (fn [{:keys [:db]} [tx-hash]]
+    {:web3/watch-transactions {:web3 (:web3 db)
+                               :transactions [{:id :my-watcher
+                                               :tx-hash tx-hash
+                                               :on-tx-success [::tx-success]
+                                               :on-tx-error [::error]
+                                               :on-tx-receipt [::tx-receipt]}]}}))
+```
+
+#### :web3/watch-blocks
+Sets up listener with callback fired on each new Ethereum block.
+
+```clojure
+(reg-event-fx
+    ::watch-blocks
+    (fn [{:keys [:db]}]
+      {:web3/watch-blocks {:id :my-watcher
+                           :web3 (:web3 db)
+                           :block-filter-opts "latest"
+                           :on-success [::new-block]
+                           :on-error [::error]}}))
+```
+
+#### :web3/stop-watching
+In any effect handler above, where you could provide `:id`, you can use this effect handler to stop that listener.
+```clojure
+(reg-event-fx
+    ::stop-watching
+    (fn [{:keys [:db]}]
+      {:web3/stop-watching {:id :my-watcher}}))
+```
+
+#### :web3/stop-watching-all
+Stops all listeners set up by all effect handlers. 
+```clojure
+(reg-event-fx
+    ::stop-watching
+    (fn [{:keys [:db]}]
+      {:web3/stop-watching-all true}))
+```
+
+## Development
+```bash
+lein deps
+# Run Ganache blockchain
+ganache-cli -p 8549
+# To run tests and rerun on changes
+lein doo chrome tests
+```
+
+
 
 
