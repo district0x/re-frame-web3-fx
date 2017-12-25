@@ -23,7 +23,7 @@ I deeply appologize, but this was absolutely necessary.
 ## Usage
 Following effect handlers are available:
 #### :web3/call
-Use it to call any function from [cljs-web3](https://github.com/madvas/cljs-web3) or any smart contract function.
+Use it to call any function from [cljs-web3](https://github.com/madvas/cljs-web3) or any smart contract function.  
 Calling [cljs-web3](https://github.com/madvas/cljs-web3) function:
 ```clojure
 (reg-event-fx
@@ -46,13 +46,13 @@ Calling **constant** smart-contract function. In this case getting total supply 
                         :on-success [::token-total-supply-result]
                         :on-error [::error]}]}}))
 ```
-Calling **state changing** smart-contract function, aka sending a transaction to the network. In this case calling `mint`
-function of MintableToken. Notice there's not `on-success`, `on-error`. Given callbacks are executed at following situations: 
+Calling **state changing** smart-contract function, aka sending a transaction to the network. In this case calling [mint](https://github.com/district0x/re-frame-web3-fx/blob/master/resources/MintableToken.sol#L34)
+function of MintableToken. Notice there's no `on-success`, `on-error`. Given callbacks are executed at following situations: 
 * `:on-tx-hash` When tx is successfully sent to the network. Receives tx-hash in parameters.
-* `:on-tx-hash-error` When tx wasn't send to the network. Usually user rejected to sign. Receives tx-hash in parameters.
+* `:on-tx-hash-error` When tx wasn't send to the network. Usually user rejected to sign.
 * `:on-tx-success` When tx was processed without error. Receives receipt in parameters. 
 * `:on-tx-failed` When there was an error during processing a transaction. Receives receipt in parameters.
-* `:on-tx-receipt` General callback when tx was processed. Either with error or not. Receives receipt in parameters.
+* `:on-tx-receipt` General callback when tx was processed. Either with error or not. Receives receipt in parameters.  
 (You don't need to use all of them, only ones you need)
 
 ```clojure
@@ -75,7 +75,7 @@ function of MintableToken. Notice there's not `on-success`, `on-error`. Given ca
 
 #### :web3/get-balances
 Gets balance of Ether or ERC20 token. Optionally you can pass `:watch? true`, so the callback will be fired everytime
-balance changes. 
+the balance changes.   
 Getting and watching balance or Ether:
 ```clojure
 (reg-event-fx
@@ -107,8 +107,8 @@ Getting and watching balance of a ERC20 Token. Notice you need to pass `:instanc
 ```
 
 #### :web3/watch-events
-Listens to smart-contract events. Callback receives event `:args` as first param and complete event data as second.
-In this example we watch Mint event of MintableToken
+Listens to smart-contract events. Callback receives event `:args` as first param and complete event data as a second.
+In this example we watch [Mint](https://github.com/district0x/re-frame-web3-fx/blob/master/resources/MintableToken.sol#L17) event of MintableToken
 ```clojure
 (reg-event-fx
   ::watch-mint
