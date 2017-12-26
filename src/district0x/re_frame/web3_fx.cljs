@@ -14,7 +14,7 @@
 (s/def ::dispatch vector?)
 (s/def ::contract-fn-arg any?)
 (s/def ::address string?)
-(s/def ::watch? boolean?)
+(s/def ::watch? (s/nilable boolean?))
 (s/def ::block-filter-opts block-filter-opts?)
 (s/def ::web3 (complement nil?))
 (s/def ::event-ids sequential?)
@@ -65,7 +65,7 @@
 
 (s/def ::addresses
   (s/coll-of (s/nilable (s/keys :req-un [::address ::on-success]
-                                :opt-un [::instance ::on-error ::watch? ::id]))))
+                                :opt-un [::on-error ::watch? ::id]))))
 
 (s/def ::get-balances (s/keys :req-un [::addresses ::web3]))
 
@@ -96,12 +96,14 @@
 
 (defn- start-listener! [{:keys [:web3 :id :block-filter-opts :callback]}]
   (let [id (if id id callback)]
+    (stop-listener! id)
     (swap! *listeners* update id conj (web3-eth/filter web3 block-filter-opts callback))
     id))
 
 
 (defn- start-event-listener! [{:keys [:instance :id :event :event-filter-opts :block-filter-opts :callback]}]
   (let [id (if id id callback)]
+    (stop-listener! id)
     (->> (web3-eth/contract-call
            instance
            event
@@ -259,17 +261,11 @@
        :block-filter-opts block-filter-opts
        :callback (dispach-fn on-success on-error)})))
 
-
-(comment
-  (reg-event-fx
-    ::stop-watching
-    (fn [{:keys [:db]}]
-      {:web3/stop-watching-all true})))
-
 (reg-fx
   :web3/stop-watching
-  (fn [{:keys [:id]}]
-    (stop-listener! id)))
+  (fn [{:keys [:ids]}]
+    (doseq [id ids]
+      (stop-listener! id))))
 
 
 (reg-fx
