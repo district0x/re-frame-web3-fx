@@ -126,10 +126,10 @@
             (when on-tx-receipt
               (dispatch (conj (vec on-tx-receipt) receipt)))
             (condp #(contains? %1 %2) (:status receipt)
-              #{"0x0" 1} (when on-tx-success
-                           (dispatch (conj (vec on-tx-success) receipt)))
-              #{"0x1" 2} (when on-tx-error
-                           (dispatch (conj (vec on-tx-error) receipt))))))))))
+              #{"0x0" 0} (when on-tx-error
+                           (dispatch (conj (vec on-tx-error) receipt)))
+              #{"0x1" 1} (when on-tx-success
+                           (dispatch (conj (vec on-tx-success) receipt))))))))))
 
 
 (defn- contract-state-call-callback [{:keys [:web3 :on-tx-hash :on-tx-hash-error :on-tx-receipt :on-tx-error
