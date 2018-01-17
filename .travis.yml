@@ -1,3 +1,5 @@
+sudo: required
+dist: trusty
 language: clojure
 script: lein doo chrome "tests" once
 addons:

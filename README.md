@@ -19,10 +19,20 @@ This library was completely rewritten on version upgrade 0.2.3 -> 1.0.0. API was
 Reasons for breakage were also unerlying changes in Ethereum (fork to Byzantium) and preparations for web3 1.0.0.  
 I deeply appologize, but this was absolutely necessary. 
 
+## API Overview
+
+- [:web3/call](#web3call)
+- [:web3/get-balances](#web3get-balances)
+- [:web3/watch-events](#web3watch-events)
+- [:web3/watch-transactions](#web3watch-transactions)
+- [:web3/watch-blocks](#web3watch-blocks)
+- [:web3/stop-watching](#web3stop-watching)
+- [:web3/stop-watching-all](#web3stop-watching-all)
+
 
 ## Usage
 Following effect handlers are available:
-#### :web3/call
+#### `:web3/call`
 Use it to call any function from [cljs-web3](https://github.com/madvas/cljs-web3) or any smart contract function.  
 Calling [cljs-web3](https://github.com/madvas/cljs-web3) function:
 ```clojure
@@ -73,7 +83,7 @@ function of MintableToken. Notice there's no `on-success`, `on-error`. Given cal
 ```
 
 
-#### :web3/get-balances
+#### `:web3/get-balances`
 Gets balance of Ether or ERC20 token. Optionally you can pass `:watch? true`, so the callback will be fired everytime
 the balance changes.   
 Getting and watching balance or Ether:
@@ -104,7 +114,7 @@ Getting and watching balance of a ERC20 Token. Notice you need to pass `:instanc
                                        :on-error [::error]})}}))
 ```
 
-#### :web3/watch-events
+#### `:web3/watch-events`
 Listens to smart-contract events. Callback receives event `:args` as first param and complete event data as a second.
 In this example we watch [Mint](https://github.com/district0x/re-frame-web3-fx/blob/master/resources/MintableToken.sol#L17) event of MintableToken
 ```clojure
@@ -120,7 +130,7 @@ In this example we watch [Mint](https://github.com/district0x/re-frame-web3-fx/b
                                    :on-error [::error]}]}}))
 ```
 
-#### :web3/watch-transactions
+#### `:web3/watch-transactions`
 Sets up listener until transaction receipt is available. Callbacks are fired same way as in `:web3/call` for 
 state-changing contract functions. 
 
@@ -137,7 +147,7 @@ state-changing contract functions.
                                                :on-tx-receipt [::tx-receipt]}]}}))
 ```
 
-#### :web3/watch-blocks
+#### `:web3/watch-blocks`
 Sets up listener with callback fired on each new Ethereum block.
 
 ```clojure
@@ -151,7 +161,7 @@ Sets up listener with callback fired on each new Ethereum block.
                            :on-error [::error]}}))
 ```
 
-#### :web3/stop-watching
+#### `:web3/stop-watching`
 In any effect handler above, where you could provide `:id`, you can use this effect handler to stop that listener.
 ```clojure
 (reg-event-fx
@@ -160,7 +170,7 @@ In any effect handler above, where you could provide `:id`, you can use this eff
       {:web3/stop-watching {:ids [:my-watcher]}}))
 ```
 
-#### :web3/stop-watching-all
+#### `:web3/stop-watching-all`
 Stops all listeners set up by all effect handlers. 
 ```clojure
 (reg-event-fx
