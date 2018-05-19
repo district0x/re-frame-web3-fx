@@ -61,9 +61,17 @@ function of MintableToken. Notice there's no `on-success`, `on-error`. Given cal
 * `:on-tx-hash` When tx is successfully sent to the network. Receives tx-hash in parameters.
 * `:on-tx-hash-error` When tx wasn't send to the network. Usually user rejected to sign.
 * `:on-tx-success` When tx was processed without error. Receives receipt in parameters. 
-* `:on-tx-failed` When there was an error during processing a transaction. Receives receipt in parameters.
+* `:on-tx-error` When there was an error during processing a transaction. Receives receipt in parameters.
 * `:on-tx-receipt` General callback when tx was processed. Either with error or not. Receives receipt in parameters.  
-(You don't need to use all of them, only ones you need)
+(You don't need to use all of them, only ones you need) <br>
+
+All of these callbacks have their respective multi-event callbacks i.e.:
+
+* `:on-tx-hash-n` 
+* `:on-tx-hash-error-n` 
+* `:on-tx-success-n` 
+* `:on-tx-error-n` 
+* `:on-tx-receipt-n` 
 
 ```clojure
 (reg-event-fx
@@ -75,13 +83,12 @@ function of MintableToken. Notice there's no `on-success`, `on-error`. Given cal
                         :args [to amount]
                         :tx-opts {:from from
                                   :gas 4500000}
-                        :on-tx-hash [::tx-send-success]      
+                        :on-tx-hash-n [[::tx-send-success] [::extra]]      
                         :on-tx-hash-error [::tx-send-failed] 
                         :on-tx-success [::token-minted]
                         :on-tx-error [::tx-failed]
                         :on-tx-receipt [::tx-receipt-loaded]}]}}))
 ```
-
 
 #### `:web3/get-balances`
 Gets balance of Ether or ERC20 token. Optionally you can pass `:watch? true`, so the callback will be fired everytime
