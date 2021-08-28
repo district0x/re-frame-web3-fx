@@ -1,8 +1,9 @@
-(defproject district0x.re-frame/web3-fx "1.0.5"
+(defproject district0x.re-frame/web3-fx "1.0.6"
   :description "A re-frame effects handler for performing Ethereum Web3 API tasks"
   :url "https://github.com/district0x/re-frame-web3-fx"
   :license {:name "MIT"}
   :dependencies [[org.clojure/clojurescript "1.9.946"]
+                 [org.clojure/core.async "0.3.465"]
                  [cljs-web3 "0.19.0-0-9"]
                  [re-frame "0.10.2"]]
 

@@ -1,8 +1,11 @@
 (ns district0x.re-frame.web3-fx
   (:require
+    [cljs.core.async :refer [<! >! chan]]
     [cljs-web3.eth :as web3-eth]
+    [cljs-web3.async.eth :as web3-eth-async]
     [cljs.spec.alpha :as s]
-    [re-frame.core :refer [reg-fx dispatch console reg-event-db reg-event-fx]]))
+    [re-frame.core :refer [reg-fx dispatch console reg-event-db reg-event-fx]])
+  (:require-macros [cljs.core.async.macros :refer [go]]))
 
 (def *listeners* (atom {}))
 
@@ -113,31 +116,81 @@
       (swap! *listeners* update id conj))
     id))
 
+;; kinda dumb explicit implementation, but makes a nice API
 
-(defn- dispatch-on-tx-receipt-fn [{:keys [:web3 :id :tx-hash
-                                          :on-tx-receipt-n :on-tx-receipt :on-tx-error
-                                          :on-tx-error-n :on-tx-success-n :on-tx-success]}]
+(defn- same-sender? [tx target-tx]
+  (= (:from tx) (:from target-tx)))
+
+(defn- same-hash? [tx target-tx]
+  (= (:hash tx) (:hash target-tx)))
+
+(defn- same-input? [tx target-tx]
+  (= (:input tx) (:input target-tx)))
+
+(defn- same-nonce? [tx target-tx]
+  (= (:nonce tx) (:nonce target-tx)))
+
+(defn- dispatch-on-tx-receipt-fn
+  "get-transaction output:
+
+  Returns a transaction object its hash transaction-hash:
+  - hash: String, 32 Bytes - hash of the transaction.
+  - nonce: Number - the number of transactions made by the sender prior to this
+    one.
+  - block-hash: String, 32 Bytes - hash of the block where this transaction was
+                                   in. null when its pending.
+  - block-number: Number - block number where this transaction was in. null when
+                           its pending.
+  - transaction-index: Number - integer of the transactions index position in the
+                                block. null when its pending.
+  - from: String, 20 Bytes - address of the sender.
+  - to: String, 20 Bytes - address of the receiver. null when its a contract
+                           creation transaction.
+  - value: BigNumber - value transferred in Wei.
+  - gas-price: BigNumber - gas price provided by the sender in Wei.
+  - gas: Number - gas provided by the sender.
+  - input: String - the data sent along with the transaction.
+  "
+
+  [{:keys [:web3 :id :tx-hash :on-tx-receipt-n :on-tx-receipt :on-tx-error
+           :on-tx-error-n :on-tx-success-n :on-tx-success]}]
   (fn [err]
-    (when-not err
-      (web3-eth/get-transaction-receipt
-        web3
-        tx-hash
-        (fn [_ receipt]
-          (when (:block-number receipt)
-            (stop-listener! id)
-            (when on-tx-receipt
-              (dispatch (conj (vec on-tx-receipt) receipt)))
-            (condp #(contains? %1 %2) (:status receipt)
-              #{"0x0" "0x00" 0} (do (when on-tx-error
-                                      (dispatch (conj (vec on-tx-error) receipt)))
-                                    (when on-tx-error-n
-                                      (doseq [callback on-tx-error-n]
-                                        (dispatch (conj (vec callback) receipt)))))
-              #{"0x1" "0x01" 1} (do (when on-tx-success
-                                      (dispatch (conj (vec on-tx-success) receipt)))
-                                    (when on-tx-success-n
-                                      (doseq [callback on-tx-success-n]
-                                        (dispatch (conj (vec callback) receipt))))))))))))
+    (let [process-tx-receipt
+           (fn [[err receipt]]
+             (let [hash-replaced? (every? nil? [err receipt])
+                   checked-receipt (or receipt {:transaction-hash tx-hash})]
+               (when (or (:block-number receipt) hash-replaced?)
+                (stop-listener! id)
+                (when on-tx-receipt
+                  (dispatch (conj (vec on-tx-receipt) checked-receipt)))
+                (cond
+                  (or (contains? #{"0x0" "0x00" 0} (:status checked-receipt)) hash-replaced?)
+                  (do (when on-tx-error
+                        (dispatch (conj (vec on-tx-error) checked-receipt)))
+                      (when on-tx-error-n
+                        (doseq [callback on-tx-error-n]
+                          (dispatch (conj (vec callback) checked-receipt)))))
+
+                  (contains? #{"0x1" "0x01" 1}  (:status checked-receipt))
+                  (do (when on-tx-success
+                        (dispatch (conj (vec on-tx-success) checked-receipt)))
+                      (when on-tx-success-n
+                        (doseq [callback on-tx-success-n]
+                          (dispatch (conj (vec callback) checked-receipt)))))))))]
+      (when-not err
+       ;; search for a replacement or speed-up tx
+        (go
+          (let [block (second (<! (web3-eth-async/get-block web3 "latest" true)))
+                txs  (:transactions block)
+                target-tx (second (<! (web3-eth-async/get-transaction web3 tx-hash)))
+                speed-up-tx (first (filter  (fn [tx]
+                                              (and
+                                               (same-sender? tx target-tx)
+                                               (not (same-hash? tx target-tx))
+                                               (same-nonce? tx target-tx)
+                                               )) txs))
+                mined-hash (if speed-up-tx (:hash speed-up-tx) tx-hash)]
+            (process-tx-receipt (<! (web3-eth-async/get-transaction-receipt web3 mined-hash)))))))))
 
 
 (defn- contract-state-call-callback [{:keys [:web3
