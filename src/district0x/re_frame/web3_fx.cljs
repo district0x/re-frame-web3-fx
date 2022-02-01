@@ -7,7 +7,7 @@
     [re-frame.core :refer [reg-fx dispatch console reg-event-db reg-event-fx]])
   (:require-macros [cljs.core.async.macros :refer [go]]))
 
-(def *listeners* (atom {}))
+(def ^:dynamic *listeners* (atom {}))
 
 (defn- block-filter-opts? [x]
   (or (map? x) (string? x) (nil? x)))
