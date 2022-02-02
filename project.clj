@@ -1,4 +1,4 @@
-(defproject district0x.re-frame/web3-fx "1.0.6"
+(defproject district0x.re-frame/web3-fx "1.0.7"
   :description "A re-frame effects handler for performing Ethereum Web3 API tasks"
   :url "https://github.com/district0x/re-frame-web3-fx"
   :license {:name "MIT"}
