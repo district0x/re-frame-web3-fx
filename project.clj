@@ -29,3 +29,16 @@
                                    :output-dir "tests-output"
                                    :main "tests.runner"
                                    :optimizations :none}}]})
+
+  :deploy-repositories [["snapshots" {:url "https://clojars.org/repo"
+                                      :username :env/clojars_username
+                                      :password :env/clojars_password
+                                      :sign-releases false}]
+                        ["releases"  {:url "https://clojars.org/repo"
+                                      :username :env/clojars_username
+                                      :password :env/clojars_password
+                                      :sign-releases false}]]
+
+  :release-tasks [["vcs" "assert-committed"]
+                ["change" "version" "leiningen.release/bump-version" "release"]
+                ["deploy"]]
