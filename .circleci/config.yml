@@ -23,7 +23,6 @@ jobs:
           key: npm-packages-{{ checksum "package-lock.json" }}
           paths:
             - ./node_modules/
-      - run: truffle migrate --network ganache --reset
       - run: lein doo chrome "tests" once
 
   deploy:
