@@ -32,7 +32,7 @@ jobs:
      - checkout
      - run:
          name: Deploy to clojars
-         command: lein release :patch
+         command: lein deploy
 
 workflows:
   version: 2
