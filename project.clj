@@ -1,4 +1,4 @@
-(defproject district0x.re-frame/web3-fx "1.0.7"
+(defproject com.github.district0x/re-frame-web3-fx "1.0.8"
   :description "A re-frame effects handler for performing Ethereum Web3 API tasks"
   :url "https://github.com/district0x/re-frame-web3-fx"
   :license {:name "MIT"}
@@ -28,4 +28,18 @@
                         :compiler {:output-to "tests-output/tests.js"
                                    :output-dir "tests-output"
                                    :main "tests.runner"
-                                   :optimizations :none}}]})
+                                   :optimizations :none}}]}
+
+  :deploy-repositories [["snapshots" {:url "https://clojars.org/repo"
+                                      :username :env/clojars_username
+                                      :password :env/clojars_password
+                                      :sign-releases false}]
+                        ["releases"  {:url "https://clojars.org/repo"
+                                      :username :env/clojars_username
+                                      :password :env/clojars_password
+                                      :sign-releases false}]]
+
+  :release-tasks [["vcs" "assert-committed"]
+                  ["change" "version" "leiningen.release/bump-version" "release"]
+                  ["deploy"]]
+)
