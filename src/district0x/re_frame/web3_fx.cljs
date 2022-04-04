@@ -1,7 +1,7 @@
 (ns district0x.re-frame.web3-fx
   (:require
     [cljs.core.async :refer [<! >! chan]]
-    [cljs-web3.eth :as web3-eth]
+    [cljs-web3-next.eth :as web3-eth]
     [cljs-web3.async.eth :as web3-eth-async]
     [cljs.spec.alpha :as s]
     [re-frame.core :refer [reg-fx dispatch console reg-event-db reg-event-fx]])
@@ -112,7 +112,8 @@
            event
            event-filter-opts
            block-filter-opts
-           callback)
+           ; callback
+           )
       (swap! *listeners* update id conj))
     id))
 
@@ -263,6 +264,39 @@
                         :web3 web3})})))))
 
 
+; web3-next version
+#_ (defn contract-call [contract-instance method args opts]
+  (ocall (oapply+ (oget contract-instance "methods") (web3-helpers/camel-case (name method)) (clj->js args)) "call" (clj->js opts)))
+; web3 version (legacy)
+#_ (defn contract-call
+  "Explicitly call a method on a contract.
+  Use the kebab-cases version of the original method.
+  E.g., function fooBar() can be addressed with :foo-bar.
+  Parameters:
+  contract-instance - an instance of the contract (obtained via `contract` or
+                      `contract-at`)
+  method            - the kebab-cased version of the method
+  args              - arguments to the method
+  Example:
+  user> `(web3-eth/contract-call ContractInstance :multiply 5)`
+  25"
+  [contract-instance method & args]
+  (js-apply contract-instance method args))
+
+(defn constant-method?
+  "Detect from contract ABI whether a smart contract method is constant and can
+   be called instead of sending a transaction.
+   Based on
+     https://web3js.readthedocs.io/en/v1.7.1/glossary.html#specification
+   And how it used to be done in Web3.js 0.20.x
+     https://github.com/ChainSafe/web3.js/blob/0.20.7/lib/web3/function.js#L40"
+  [contract method]
+  (let [abi (aget contract "_jsonInterface")
+        method-abi (first (filter #(= (aget % "name") (name method)) abi))
+        mutability (aget method-abi "stateMutability")
+        constant (aget "constant" method-abi)]
+    (or (= mutability "view") (= mutability "pure") constant false)))
+
 (reg-fx
   :web3/call
   (fn [{:keys [:web3 :fns] :as params}]
@@ -276,28 +310,28 @@
                     :on-tx-success :on-tx-error
                     :on-success :on-error]} (remove nil? fns)]
       (if instance
-        (if tx-opts
-          (apply web3-eth/contract-call
-                 (concat [instance fn]
-                         args
-                         [tx-opts]
-                         [(contract-state-call-callback {:web3 web3
-                                                         :on-tx-receipt on-tx-receipt
-                                                         :on-tx-receipt-n on-tx-receipt-n
-                                                         :on-tx-hash-n on-tx-hash-n
-                                                         :on-tx-hash-error-n on-tx-hash-error-n
-                                                         :on-tx-success-n on-tx-success-n
-                                                         :on-tx-error-n on-tx-error-n
-                                                         :on-tx-hash on-tx-hash
-                                                         :on-tx-hash-error on-tx-hash-error
-                                                         :on-tx-success on-tx-success
-                                                         :on-tx-error on-tx-error})]))
-          (apply web3-eth/contract-call
-                 (concat [instance fn]
-                         args
-                         [(dispach-fn on-success on-error)])))
+        ; Decide call vs send based on state mutability like it's done in Web3.js 0.20.x
+        ;   stateMutability possible values: pure, view, constant, nonpayable, payable
+        ;     https://web3js.readthedocs.io/en/v1.7.1/glossary.html#specification
+        ;
+        ; Auto-discovery call/send: https://github.com/ChainSafe/web3.js/blob/0.20.7/lib/web3/function.js#L40
+        ; (let [x (.-stateMutability (filter #(= (.-name %) "createJob") abi))])
+        (let [send-or-call-contract (if (constant-method? instance fn) web3-eth/contract-call web3-eth/contract-send)]
+          (if tx-opts
+            (send-or-call-contract instance fn args tx-opts (contract-state-call-callback
+                                                              {:web3 web3
+                                                               :on-tx-receipt on-tx-receipt
+                                                               :on-tx-receipt-n on-tx-receipt-n
+                                                               :on-tx-hash-n on-tx-hash-n
+                                                               :on-tx-hash-error-n on-tx-hash-error-n
+                                                               :on-tx-success-n on-tx-success-n
+                                                               :on-tx-error-n on-tx-error-n
+                                                               :on-tx-hash on-tx-hash
+                                                               :on-tx-hash-error on-tx-hash-error
+                                                               :on-tx-success on-tx-success
+                                                               :on-tx-error on-tx-error}))
+            (apply web3-eth/contract-call (concat [instance fn] args [(dispach-fn on-success on-error)]))))
         (apply fn (concat [web3] args [(dispach-fn on-success on-error)]))))))
-
 
 (reg-fx
   :web3/get-balances

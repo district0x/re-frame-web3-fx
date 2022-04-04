@@ -4,7 +4,7 @@
   :license {:name "MIT"}
   :dependencies [[org.clojure/clojurescript "1.9.946"]
                  [org.clojure/core.async "0.3.465"]
-                 [cljs-web3 "0.19.0-0-9"]
+                 [is.mad/cljs-web3-next "0.0.2"]
                  [re-frame "0.10.2"]]
 
   :doo {:paths {:karma "./node_modules/karma/bin/karma"}}
