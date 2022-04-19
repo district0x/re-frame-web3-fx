@@ -2,7 +2,7 @@
   (:require
     [cljs.core.async :refer [<! >! chan]]
     [cljs-web3-next.eth :as web3-eth]
-    [cljs-web3.async.eth :as web3-eth-async]
+    [cljs-web3-next.async.eth :as web3-eth-async]
     [cljs.spec.alpha :as s]
     [re-frame.core :refer [reg-fx dispatch console reg-event-db reg-event-fx]])
   (:require-macros [cljs.core.async.macros :refer [go]]))
@@ -112,8 +112,7 @@
            event
            event-filter-opts
            block-filter-opts
-           ; callback
-           )
+           callback)
       (swap! *listeners* update id conj))
     id))
 
@@ -130,105 +129,6 @@
 
 (defn- same-nonce? [tx target-tx]
   (= (:nonce tx) (:nonce target-tx)))
-
-(defn- dispatch-on-tx-receipt-fn
-  "get-transaction output:
-
-  Returns a transaction object its hash transaction-hash:
-  - hash: String, 32 Bytes - hash of the transaction.
-  - nonce: Number - the number of transactions made by the sender prior to this
-    one.
-  - block-hash: String, 32 Bytes - hash of the block where this transaction was
-                                   in. null when its pending.
-  - block-number: Number - block number where this transaction was in. null when
-                           its pending.
-  - transaction-index: Number - integer of the transactions index position in the
-                                block. null when its pending.
-  - from: String, 20 Bytes - address of the sender.
-  - to: String, 20 Bytes - address of the receiver. null when its a contract
-                           creation transaction.
-  - value: BigNumber - value transferred in Wei.
-  - gas-price: BigNumber - gas price provided by the sender in Wei.
-  - gas: Number - gas provided by the sender.
-  - input: String - the data sent along with the transaction.
-  "
-
-  [{:keys [:web3 :id :tx-hash :on-tx-receipt-n :on-tx-receipt :on-tx-error
-           :on-tx-error-n :on-tx-success-n :on-tx-success]}]
-  (fn [err]
-    (let [process-tx-receipt
-           (fn [[err receipt]]
-             (let [hash-replaced? (every? nil? [err receipt])
-                   checked-receipt (or receipt {:transaction-hash tx-hash})]
-               (when (or (:block-number receipt) hash-replaced?)
-                (stop-listener! id)
-                (when on-tx-receipt
-                  (dispatch (conj (vec on-tx-receipt) checked-receipt)))
-                (cond
-                  (or (contains? #{"0x0" "0x00" 0} (:status checked-receipt)) hash-replaced?)
-                  (do (when on-tx-error
-                        (dispatch (conj (vec on-tx-error) checked-receipt)))
-                      (when on-tx-error-n
-                        (doseq [callback on-tx-error-n]
-                          (dispatch (conj (vec callback) checked-receipt)))))
-
-                  (contains? #{"0x1" "0x01" 1}  (:status checked-receipt))
-                  (do (when on-tx-success
-                        (dispatch (conj (vec on-tx-success) checked-receipt)))
-                      (when on-tx-success-n
-                        (doseq [callback on-tx-success-n]
-                          (dispatch (conj (vec callback) checked-receipt)))))))))]
-      (when-not err
-       ;; search for a replacement or speed-up tx
-        (go
-          (let [block (second (<! (web3-eth-async/get-block web3 "latest" true)))
-                txs  (:transactions block)
-                target-tx (second (<! (web3-eth-async/get-transaction web3 tx-hash)))
-                speed-up-tx (first (filter  (fn [tx]
-                                              (and
-                                               (same-sender? tx target-tx)
-                                               (not (same-hash? tx target-tx))
-                                               (same-nonce? tx target-tx)
-                                               )) txs))
-                mined-hash (if speed-up-tx (:hash speed-up-tx) tx-hash)]
-            (process-tx-receipt (<! (web3-eth-async/get-transaction-receipt web3 mined-hash)))))))))
-
-
-(defn- contract-state-call-callback [{:keys [:web3
-                                             :on-tx-receipt-n
-                                             :on-tx-hash-n :on-tx-hash-error-n
-                                             :on-tx-success-n :on-tx-error-n
-                                             :on-tx-receipt
-                                             :on-tx-hash :on-tx-hash-error
-                                             :on-tx-success :on-tx-error]}]
-  (fn [err tx-hash]
-    (if err
-      (do (when on-tx-hash-error
-            (dispatch (conj (vec on-tx-hash-error) err)))
-          (when on-tx-hash-error-n
-            (doseq [callback on-tx-hash-error-n]
-              (dispatch (conj (vec callback) err)))))
-
-      (do (when on-tx-hash
-            (dispatch (conj (vec on-tx-hash) tx-hash)))
-          (when on-tx-hash-n
-            (doseq [callback on-tx-hash-n]
-              (dispatch (conj (vec callback) tx-hash))))
-          (let [listener-id (rand 9999999)]
-            (start-listener!
-             {:web3 web3
-              :id listener-id
-              :block-filter-opts "latest"
-              :callback (dispatch-on-tx-receipt-fn {:id listener-id
-                                                    :tx-hash tx-hash
-                                                    :web3 web3
-                                                    :on-tx-receipt-n on-tx-receipt-n
-                                                    :on-tx-success-n on-tx-success-n
-                                                    :on-tx-error-n on-tx-error-n
-                                                    :on-tx-receipt on-tx-receipt
-                                                    :on-tx-error on-tx-error
-                                                    :on-tx-success on-tx-success})}))))))
-
 
 (reg-fx
   :web3/watch-events
@@ -250,7 +150,8 @@
   (fn [{:keys [:web3 :transactions] :as params}]
     (s/assert ::watch-transactions params)
     (doseq [{:keys [:tx-hash :on-tx-receipt :on-tx-success :on-tx-error :id]} transactions]
-      (let [listener-id (or id (rand 9999999))]
+      (let [listener-id (or id (rand 9999999))
+            dispatch-on-tx-receipt-fn (fn [params] (throw js/Error. "Find another way to do this. Web3.eth.filter was removed" params))]
         (start-listener!
           {:web3 web3
            :id listener-id
@@ -263,25 +164,6 @@
                         :tx-hash tx-hash
                         :web3 web3})})))))
 
-
-; web3-next version
-#_ (defn contract-call [contract-instance method args opts]
-  (ocall (oapply+ (oget contract-instance "methods") (web3-helpers/camel-case (name method)) (clj->js args)) "call" (clj->js opts)))
-; web3 version (legacy)
-#_ (defn contract-call
-  "Explicitly call a method on a contract.
-  Use the kebab-cases version of the original method.
-  E.g., function fooBar() can be addressed with :foo-bar.
-  Parameters:
-  contract-instance - an instance of the contract (obtained via `contract` or
-                      `contract-at`)
-  method            - the kebab-cased version of the method
-  args              - arguments to the method
-  Example:
-  user> `(web3-eth/contract-call ContractInstance :multiply 5)`
-  25"
-  [contract-instance method & args]
-  (js-apply contract-instance method args))
 
 (defn constant-method?
   "Detect from contract ABI whether a smart contract method is constant and can
@@ -301,37 +183,51 @@
   :web3/call
   (fn [{:keys [:web3 :fns] :as params}]
     (s/assert ::call params)
-    (doseq [{:keys [:instance :fn :args :tx-opts
-                    :on-tx-receipt-n
-                    :on-tx-hash-n :on-tx-hash-error-n
-                    :on-tx-success-n :on-tx-error-n
-                    :on-tx-receipt
-                    :on-tx-hash :on-tx-hash-error
+    (doseq [{:keys [:instance :fn :args :on-success :on-error]} (remove nil? fns)]
+      (let [call-contract-method? (not (nil? instance))
+            call-on-contract-instance #(apply web3-eth/contract-call (concat [instance fn] args [(dispach-fn on-success on-error)]))
+            call-on-web3-instance #(apply fn (concat [web3] args [(dispach-fn on-success on-error)]))]
+        (if call-contract-method? (call-on-contract-instance) (call-on-web3-instance))))))
+
+(defn safe-dispatch-one-many [re-event-one re-event-many result]
+  (let [dispatch-single (fn [re-event result] (dispatch (conj (vec re-event-one) result)))]
+    (when re-event-one (dispatch-single re-event-one result))
+    (when re-event-many (doseq [re-event re-event-many] (dispatch-single re-event result)))))
+
+(defn dispatch-on-tx-promi-event [tx-promi-event {:keys [:on-tx-hash :on-tx-hash-n
+                                                         :on-tx-hash-error :on-tx-hash-error-n
+                                                         :on-tx-success :on-tx-success-n
+                                                         :on-tx-receipt :on-tx-receipt-n
+                                                         :on-tx-error :on-tx-error-n] :as re-events}]
+  (.once tx-promi-event "transactionHash" (partial safe-dispatch-one-many on-tx-hash on-tx-hash-n))
+  (.once tx-promi-event "receipt" (partial safe-dispatch-one-many on-tx-receipt on-tx-receipt-n))
+  ; The difference between tx-error and tx-hash-error is whether the Error
+  ; object passed to them has .receipt property. Since it's used for logging
+  ; and in neither case the Tx was successful, for simplicity I left the
+  ; implementation the same
+  ; https://web3js.readthedocs.io/en/v1.7.1/web3-eth-contract.html#id36
+  (.once tx-promi-event "error" (partial safe-dispatch-one-many on-tx-error on-tx-error-n))
+  (.once tx-promi-event "error" (partial safe-dispatch-one-many on-tx-hash-error on-tx-hash-error-n)))
+
+(def tx-result-re-events [:on-tx-hash :on-tx-hash-n
+                          :on-tx-hash-error :on-tx-hash-error-n
+                          :on-tx-success :on-tx-success-n
+                          :on-tx-receipt :on-tx-receipt-n
+                          :on-tx-error :on-tx-error-n])
+(reg-fx
+  :web3/send
+  (fn [{:keys [:web3 :fns] :as params}]
+    (s/assert ::call params)
+    (doseq [{method :fn
+             :keys [:instance :args :tx-opts
                     :on-tx-success :on-tx-error
-                    :on-success :on-error]} (remove nil? fns)]
+                    :on-success :on-error] :as method-args} (remove nil? fns)]
       (if instance
-        ; Decide call vs send based on state mutability like it's done in Web3.js 0.20.x
-        ;   stateMutability possible values: pure, view, constant, nonpayable, payable
-        ;     https://web3js.readthedocs.io/en/v1.7.1/glossary.html#specification
-        ;
-        ; Auto-discovery call/send: https://github.com/ChainSafe/web3.js/blob/0.20.7/lib/web3/function.js#L40
-        ; (let [x (.-stateMutability (filter #(= (.-name %) "createJob") abi))])
-        (let [send-or-call-contract (if (constant-method? instance fn) web3-eth/contract-call web3-eth/contract-send)]
-          (if tx-opts
-            (send-or-call-contract instance fn args tx-opts (contract-state-call-callback
-                                                              {:web3 web3
-                                                               :on-tx-receipt on-tx-receipt
-                                                               :on-tx-receipt-n on-tx-receipt-n
-                                                               :on-tx-hash-n on-tx-hash-n
-                                                               :on-tx-hash-error-n on-tx-hash-error-n
-                                                               :on-tx-success-n on-tx-success-n
-                                                               :on-tx-error-n on-tx-error-n
-                                                               :on-tx-hash on-tx-hash
-                                                               :on-tx-hash-error on-tx-hash-error
-                                                               :on-tx-success on-tx-success
-                                                               :on-tx-error on-tx-error}))
-            (apply web3-eth/contract-call (concat [instance fn] args [(dispach-fn on-success on-error)]))))
-        (apply fn (concat [web3] args [(dispach-fn on-success on-error)]))))))
+        (if tx-opts
+          (dispatch-on-tx-promi-event (web3-eth/contract-send instance method args tx-opts)
+                                      (select-keys method-args tx-result-re-events))
+          (web3-eth/contract-call instance method args (dispach-fn on-success on-error)))
+        (apply method (concat [web3] args [(dispach-fn on-success on-error)]))))))
 
 (reg-fx
   :web3/get-balances
