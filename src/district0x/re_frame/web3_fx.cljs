@@ -151,7 +151,7 @@
     (s/assert ::watch-transactions params)
     (doseq [{:keys [:tx-hash :on-tx-receipt :on-tx-success :on-tx-error :id]} transactions]
       (let [listener-id (or id (rand 9999999))
-            dispatch-on-tx-receipt-fn (fn [params] (throw js/Error. "Find another way to do this. Web3.eth.filter was removed" params))]
+            dispatch-on-tx-receipt-fn (fn [params] (throw (js/Error. "Find another way to do this. Web3.eth.filter was removed" params)))]
         (start-listener!
           {:web3 web3
            :id listener-id
