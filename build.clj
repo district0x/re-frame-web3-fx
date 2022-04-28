@@ -5,7 +5,7 @@
 
 (def lib 'is.mad/re-frame-web3-fx) ; ends up as <group-id>/<artifact-id> in pom.xml
 ; (def version (format "1.2.%s" (b/git-count-revs nil)))
-(def version "0.0.2")
+(def version "0.0.3")
 (def class-dir "target/classes")
 (def basis (b/create-basis {:project "deps.edn"}))
 (def jar-file (format "target/%s-%s.jar" (name lib) version))

@@ -1,0 +1,18 @@
+{
+  "name": "CITests",
+  "version": "1.0.0",
+  "description": "Testing",
+  "devDependencies": {
+    "web3": "1.7.1",
+    "truffle": "5.5.10",
+    "jsedn": "0.4.1",
+    "karma": "^6.3.17",
+    "karma-chrome-launcher": "^3.1.1",
+    "karma-cljs-test": "^0.1.0",
+    "shadow-cljs": "2.18.0",
+    "react": "16.13.0",
+    "react-dom": "16.13.0"
+  },
+  "author": "",
+  "license": "MIT"
+}

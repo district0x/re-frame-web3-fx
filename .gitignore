@@ -15,3 +15,6 @@ pom.xml.asc
 /node_modules/
 /tests-output/
 /web3-fx.iml
+.cpcache
+.shadow-cljs
+out
