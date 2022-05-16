@@ -5,7 +5,7 @@
  :builds
  {:test-browser {:target :browser-test
                  :ns-regexp "tests"
-                 :runner-ns tests.runner
+                 ; :runner-ns tests.runner
                  :test-dir "out/browser-tests"}
   :test-ci {:target :karma
             :ns-regexp "tests"

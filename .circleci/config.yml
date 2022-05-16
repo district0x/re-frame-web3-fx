@@ -5,42 +5,56 @@ jobs:
     working_directory: ~/ci
     docker:
       # Primary container image where all steps run.
-      - image: district0x/cljs-dev
+      - image: 487920318758.dkr.ecr.us-west-2.amazonaws.com/cljs-web3-ci:latest
+        aws_auth:
+            aws_access_key_id: $AWS_ACCESS_KEY_ID
+            aws_secret_access_key: $AWS_SECRET_ACCESS_KEY
       # Secondary container image on common network.
       - image: trufflesuite/ganache-cli:latest
-        command: [-d, -m district0x, -p 8545, -l 8000000]
+        command: [-d, -m district0x, -p 8549, -l 8000000]
     steps:
       - checkout
       - restore_cache:
           name: Restore npm package cache
           keys:
-            - npm-packages-{{ checksum "package-lock.json" }}
+            - npm-packages-{{ checksum "yarn.lock" }}
       - run:
           name: Install node modules
-          command: lein npm install
+          command: yarn install
       - save_cache:
           name: Save npm package cache
-          key: npm-packages-{{ checksum "package-lock.json" }}
+          key: npm-packages-{{ checksum "yarn.lock" }}
           paths:
             - ./node_modules/
-      - run: lein doo chrome "tests" once
+      - run: npx truffle migrate --network ganache --reset
+      - run: npx shadow-cljs compile test-ci
+      - run: CHROME_BIN=`which chromium-browser` npx karma start karma.conf.js --single-run
 
   deploy:
-   machine: true
-   steps:
-     - checkout
-     - run:
-         name: Deploy to clojars
-         command: lein deploy
+    working_directory: ~/ci
+
+    docker:
+      - image: 487920318758.dkr.ecr.us-west-2.amazonaws.com/cljs-web3-ci:latest
+        aws_auth:
+            aws_access_key_id: $AWS_ACCESS_KEY_ID
+            aws_secret_access_key: $AWS_SECRET_ACCESS_KEY
+    steps:
+      - checkout
+      - run:
+          name: Build JAR
+          command: clojure -T:build jar
+      - run:
+          name: Release to clojars
+          command: clojure -T:build deploy
 
 workflows:
   version: 2
   test_and_deploy:
     jobs:
-      # - test
+      - test
       - deploy:
-          # requires:
-          #   - test
+          requires:
+            - test
           filters:
             branches:
               only: master

@@ -11,7 +11,8 @@
   ; district0x/bignumber {:mvn/version "1.0.3"}
   ; binaryage/oops {:mvn/version "0.7.2"}
   ; is.mad/cljs-web3-next {:mvn/version "0.0.3"}
-  is.mad/cljs-web3-next {:local/root "/home/madis/code/district0x/cljs-web3-next"}
+  ; is.mad/cljs-web3-next {:local/root "/home/madis/code/district0x/cljs-web3-next"}
+  io.github.district0x/cljs-web3-next {:mvn/version "0.2.0-SNAPSHOT"}
   }
  :aliases
  {:dev {:extra-deps {day8.re-frame/test {:mvn/version "0.1.5"}}}

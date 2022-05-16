@@ -1,5 +1,5 @@
 (ns tests.all
-  (:require [cljs.core.async :refer [<! >! chan]]
+  (:require [cljs.core.async :refer [<! >! chan timeout]]
             [cljs-web3-next.core :as web3-core]
             [cljs-web3-next.db :as web3-db]
             [cljs-web3-next.eth :as web3-eth]
@@ -285,12 +285,25 @@
    :after (fn [])})
 
 
+(deftest sync-sanity
+  (is (= 1 1)))
+
+(deftest async-sanity
+  (async done
+         (go
+           (let [wait-ms 1100
+                 start-timestamp (.now js/Date)
+                 _ (<! (timeout wait-ms))
+                 end-timestamp (.now js/Date)]
+             (is (<= wait-ms (- end-timestamp start-timestamp)))
+             (done)))))
+
 (def tests-done (atom {
                        :contract-tests false
                        ; :ether-tests false
                        }))
 
-(deftest contract-tests
+#_ (deftest contract-tests
   (run-test-async
     (let [contract (subscribe [::contract])
           accounts (subscribe [::accounts])
@@ -344,7 +357,7 @@
                       (swap! tests-done assoc :contract-tests true)
                       )))))))))))
 
-(deftest ether-tests
+#_ (deftest ether-tests
   (run-test-async
     (let [accounts (subscribe [::accounts])]
       (dispatch [::load-accounts])

@@ -10,15 +10,15 @@
   )
 
 (defn stop [done]
-  (async/go-loop [period 1000]
-                 (if (every true? (vals @tests.all/tests-done))
-                   (do
-                     (println "DONE")
-                     (done))
-                   (do
-                     (println "WAITING")
-                     (async/<! (async/timeout period))
-                     (recur done))))
+  ; (async/go-loop [period 1000]
+  ;                (if (every? true? (vals @tests.all/tests-done))
+  ;                  (do
+  ;                    (println "DONE")
+  ;                    (done))
+  ;                  (do
+  ;                    (println "WAITING")
+  ;                    (async/<! (async/timeout period))
+  ;                    (recur done))))
   (done))
 
 (defn ^:export init []
