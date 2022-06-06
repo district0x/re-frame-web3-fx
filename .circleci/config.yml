@@ -26,7 +26,6 @@ jobs:
           key: npm-packages-{{ checksum "yarn.lock" }}
           paths:
             - ./node_modules/
-      - run: npx truffle migrate --network ganache --reset
       - run: npx shadow-cljs compile test-ci
       - run: CHROME_BIN=`which chromium-browser` npx karma start karma.conf.js --single-run
 
