@@ -196,8 +196,3 @@ Stops all listeners set up by all effect handlers.
   - ```
     CHROME_BIN=`which chromium-browser` npx karma start --single-run`
   ```
-
-
-
-
-

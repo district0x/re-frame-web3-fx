@@ -8,7 +8,6 @@
             [cljs-web3-next.personal :as web3-personal]
             [cljs-web3-next.shh :as web3-shh]
             [cljs.test :refer-macros [deftest is testing run-tests use-fixtures async]]
-            [cljsjs.web3]
             [day8.re-frame.test :refer [run-test-async wait-for run-test-sync]]
             [district0x.re-frame.web3-fx]
             [tests.contract-helpers :as test-contract-helpers]
