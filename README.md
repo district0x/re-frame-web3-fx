@@ -5,7 +5,7 @@
 [re-frame](https://github.com/Day8/re-frame) [Effectful Handlers](https://github.com/Day8/re-frame/blob/develop/docs/EffectfulHandlers.md) to work with [Ethereum](https://ethereum.org/) blockchain [Web3 API](https://github.com/ethereum/wiki/wiki/JavaScript-API), using [cljs-web3](https://github.com/madvas/cljs-web3)
 
 ## Installation
-Add `[district0x.re-frame/web3-fx "1.0.7"]` into your project.clj  
+Add `[district0x.re-frame/web3-fx "1.0.7"]` into your project.clj
 Include `[district0x.re-frame.web3-fx]` in your CLJS file
 
 ```clojure
@@ -15,9 +15,9 @@ Include `[district0x.re-frame.web3-fx]` in your CLJS file
 ```
 
 ## Breaking changes 0.2.3 -> 1.0.0
-This library was completely rewritten on version upgrade 0.2.3 -> 1.0.0. API was greatly changed (simplified). 
-Reasons for breakage were also unerlying changes in Ethereum (fork to Byzantium) and preparations for web3 1.0.0.  
-I deeply appologize, but this was absolutely necessary. 
+This library was completely rewritten on version upgrade 0.2.3 -> 1.0.0. API was greatly changed (simplified).
+Reasons for breakage were also unerlying changes in Ethereum (fork to Byzantium) and preparations for web3 1.0.0.
+I deeply appologize, but this was absolutely necessary.
 
 ## API Overview
 
@@ -33,7 +33,7 @@ I deeply appologize, but this was absolutely necessary.
 ## Usage
 Following effect handlers are available:
 #### `:web3/call`
-Use it to call any function from [cljs-web3](https://github.com/madvas/cljs-web3) or any smart contract function.  
+Use it to call any function from [cljs-web3](https://github.com/madvas/cljs-web3) or any smart contract function.
 Calling [cljs-web3](https://github.com/madvas/cljs-web3) function:
 ```clojure
 (reg-event-fx
@@ -57,21 +57,21 @@ Calling **constant** smart-contract function. In this case getting total supply 
                         :on-error [::error]}]}}))
 ```
 Calling **state changing** smart-contract function, aka sending a transaction to the network. In this case calling [mint](https://github.com/district0x/re-frame-web3-fx/blob/master/resources/MintableToken.sol#L34)
-function of MintableToken. Notice there's no `on-success`, `on-error`. Given callbacks are executed at following situations: 
+function of MintableToken. Notice there's no `on-success`, `on-error`. Given callbacks are executed at following situations:
 * `:on-tx-hash` When tx is successfully sent to the network. Receives tx-hash in parameters.
 * `:on-tx-hash-error` When tx wasn't send to the network. Usually user rejected to sign.
-* `:on-tx-success` When tx was processed without error. Receives receipt in parameters. 
+* `:on-tx-success` When tx was processed without error. Receives receipt in parameters.
 * `:on-tx-error` When there was an error during processing a transaction. Receives receipt in parameters.
-* `:on-tx-receipt` General callback when tx was processed. Either with error or not. Receives receipt in parameters.  
+* `:on-tx-receipt` General callback when tx was processed. Either with error or not. Receives receipt in parameters.
 (You don't need to use all of them, only ones you need) <br>
 
 All of these callbacks have their respective multi-event callbacks i.e.:
 
-* `:on-tx-hash-n` 
-* `:on-tx-hash-error-n` 
-* `:on-tx-success-n` 
-* `:on-tx-error-n` 
-* `:on-tx-receipt-n` 
+* `:on-tx-hash-n`
+* `:on-tx-hash-error-n`
+* `:on-tx-success-n`
+* `:on-tx-error-n`
+* `:on-tx-receipt-n`
 
 ```clojure
 (reg-event-fx
@@ -83,8 +83,8 @@ All of these callbacks have their respective multi-event callbacks i.e.:
                         :args [to amount]
                         :tx-opts {:from from
                                   :gas 4500000}
-                        :on-tx-hash-n [[::tx-send-success] [::extra]]      
-                        :on-tx-hash-error [::tx-send-failed] 
+                        :on-tx-hash-n [[::tx-send-success] [::extra]]
+                        :on-tx-hash-error [::tx-send-failed]
                         :on-tx-success [::token-minted]
                         :on-tx-error [::tx-failed]
                         :on-tx-receipt [::tx-receipt-loaded]}]}}))
@@ -92,7 +92,7 @@ All of these callbacks have their respective multi-event callbacks i.e.:
 
 #### `:web3/get-balances`
 Gets balance of Ether or ERC20 token. Optionally you can pass `:watch? true`, so the callback will be fired everytime
-the balance changes.   
+the balance changes.
 Getting and watching balance or Ether:
 ```clojure
 (reg-event-fx
@@ -138,8 +138,8 @@ In this example we watch [Mint](https://github.com/district0x/re-frame-web3-fx/b
 ```
 
 #### `:web3/watch-transactions`
-Sets up listener until transaction receipt is available. Callbacks are fired same way as in `:web3/call` for 
-state-changing contract functions. 
+Sets up listener until transaction receipt is available. Callbacks are fired same way as in `:web3/call` for
+state-changing contract functions.
 
 ```clojure
 (reg-event-fx
@@ -178,7 +178,7 @@ In any effect handler above, where you could provide `:id`, you can use this eff
 ```
 
 #### `:web3/stop-watching-all`
-Stops all listeners set up by all effect handlers. 
+Stops all listeners set up by all effect handlers.
 ```clojure
 (reg-event-fx
     ::stop-watching
@@ -186,15 +186,13 @@ Stops all listeners set up by all effect handlers.
       {:web3/stop-watching-all true}))
 ```
 
-## Development
-```bash
-lein deps
-# Run Ganache blockchain
-ganache-cli -p 8549
-# To run tests and rerun on changes
-lein doo chrome tests
-```
+## Running tests
 
-
-
-
+1. On development machine
+  - `npx shadow-cljs watch test-browser`
+  - Open http://d0x-vm:6502
+2. On CI (or headless env)
+  - `npx shadow-cljs compile test-ci`
+  - ```
+    CHROME_BIN=`which chromium-browser` npx karma start --single-run`
+  ```
