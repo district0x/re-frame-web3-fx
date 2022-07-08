@@ -26,6 +26,7 @@ I deeply appologize, but this was absolutely necessary.
 - [:web3/watch-events](#web3watch-events)
 - [:web3/watch-transactions](#web3watch-transactions)
 - [:web3/watch-blocks](#web3watch-blocks)
+- [:web3/stop-watching-balances](#web3stop-watching-balances)
 - [:web3/stop-watching](#web3stop-watching)
 - [:web3/stop-watching-all](#web3stop-watching-all)
 
@@ -100,8 +101,7 @@ Getting and watching balance or Ether:
   (fn [{:keys [:db]} [_ addresses]]
     {:web3/get-balances {:web3 (:web3 db)
                          :addresses (for [address addresses]
-                                      {:id (str "balance-" address) ;; If you watch?, pass :id so you can stop watching later
-                                       :address address
+                                      {:address address
                                        :watch? true
                                        :on-success [::ether-balance-loaded address]
                                        :on-error [::error]})}}))
@@ -113,8 +113,7 @@ Getting and watching balance of a ERC20 Token. Notice you need to pass `:instanc
   (fn [{:keys [:db]} [_ addresses]]
     {:web3/get-balances {:web3 (:web3 db)
                          :addresses (for [address addresses]
-                                      {:id (str "balance-" address) ;; If you watch?, pass :id so you can stop watching later
-                                       :address address
+                                      {:address address
                                        :instance (:token-contract-instance db)
                                        :watch? true
                                        :on-success [::token-balance-loaded address]
@@ -131,7 +130,7 @@ In this example we watch [Mint](https://github.com/district0x/re-frame-web3-fx/b
     {:web3/watch-events {:events [{:id :mint-watcher
                                    :event :Mint
                                    :instance (:token-contract-instance db)
-                                   :block-filter-opts {:from-block 0 :to-block "latest"}
+                                   :block-filter-opts {:from-block 0}
                                    :event-filter-opts {:to to}
                                    :on-success [::token-mint-event]
                                    :on-error [::error]}]}}))
@@ -163,10 +162,20 @@ Sets up listener with callback fired on each new Ethereum block.
     (fn [{:keys [:db]}]
       {:web3/watch-blocks {:id :my-watcher
                            :web3 (:web3 db)
-                           :block-filter-opts "latest"
                            :on-success [::new-block]
                            :on-error [::error]}}))
 ```
+
+#### `:web3/stop-watching-balances`
+Stops listeners previously set up with `:web3/get-balances`
+```clojure
+(reg-event-fx
+    ::stop-watching-balances
+    (fn [{:keys [:db]} [_ addresses]]
+      {:web3/stop-watching-balances {:addresses (for [address addresses]
+                                        {:address address
+                                         :instance (:token-contract-instance db)})}}))
+ ```
 
 #### `:web3/stop-watching`
 In any effect handler above, where you could provide `:id`, you can use this effect handler to stop that listener.

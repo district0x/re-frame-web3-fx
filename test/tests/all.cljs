@@ -15,9 +15,8 @@
             ["web3" :as Web3])
   (:require-macros [cljs.core.async.macros :refer [go]]))
 
-; (def web3 (web3/create-web3 "ws://d0x-vm:8549"))
-(def web3
-  (new Web3 (web3-core/ws-provider "ws://d0x-vm:8549")))
+(def ganache-url "d0x-vm:8549")
+(def web3 (atom nil))
 
 (def gas-limit 4500000)
 
@@ -75,7 +74,7 @@
   ::load-accounts
   interceptors
   (fn [_ []]
-    {:web3/call {:web3 web3
+    {:web3/call {:web3 @web3
                  :fns [{:fn web3-eth/accounts
                         :on-success [::accounts-loaded]
                         :on-error [::error]}]}}))
@@ -91,10 +90,10 @@
 (reg-event-fx
   ::deploy-contract
   interceptors
-  (fn [_ [abi tx-opts]]
-    {:web3/call {:web3 web3
+  (fn [_ [abi options tx-opts]]
+    {:web3/call {:web3 @web3
                  :fns [{:fn web3-eth/contract-new
-                        :args [abi tx-opts]
+                        :args [abi options tx-opts]
                         :on-success [::contract-deployed*]
                         :on-error [::error]}]}}))
 
@@ -103,8 +102,8 @@
   ::contract-deployed*
   interceptors
   (fn [{:keys [:db]} [contract-instance]]
-    (when (aget contract-instance "address")                ;; Contract gets address only on 2nd fire
-      {:dispatch [::contract-deployed contract-instance]})))
+    (aget contract-instance "options" "address")
+      {:dispatch [::contract-deployed contract-instance]}))
 
 
 (reg-event-fx
@@ -117,7 +116,7 @@
   ::get-token-total-supply
   interceptors
   (fn [{:keys [:db]}]
-    {:web3/call {:web3 web3
+    {:web3/call {:web3 @web3
                  :fns [{:instance (contract db)
                         :fn :total-supply
                         :on-success [::token-total-supply-result]
@@ -128,14 +127,14 @@
   ::token-total-supply-result
   interceptors
   (fn [{:keys [:db]} [result]]
-    {:db (assoc db :total-supply (.toNumber result))}))
+    {:db (assoc db :total-supply result)}))
 
 
 (reg-event-fx
   ::mint-token
   interceptors
   (fn [{:keys [:db]} [{:keys [:to :amount :from]}]]
-    {:web3/call {:web3 web3
+    {:web3/send {:web3 @web3
                  :fns [{:instance (contract db)
                         :fn :mint
                         :args [to amount]
@@ -145,7 +144,8 @@
                         :on-tx-success [::token-minted]
                         :on-tx-hash-error [::error]
                         :on-tx-error [::error]
-                        :on-tx-receipt [::mint-token-receipt-loaded]}]}}))
+                        :on-tx-receipt [::mint-token-receipt-loaded]
+                        }]}}))
 
 (reg-event-fx
   ::mint-tx-hash-loaded
@@ -170,10 +170,11 @@
   ::watch-mint
   interceptors
   (fn [{:keys [:db]} [{:keys [:to]}]]
-    {:web3/watch-events {:events [{:id :mint-watcher
+    {:web3/watch-events {:web3 @web3
+                         :events [{:id :mint-watcher
                                    :event :Mint
                                    :instance (contract db)
-                                   :block-filter-opts {:from-block 0 :to-block "latest"}
+                                   :block-filter-opts {:from-block 0}
                                    :event-filter-opts {:to to}
                                    :on-success [::token-minted-event]
                                    :on-error [::error]}]}}))
@@ -190,7 +191,7 @@
   ::load-token-balances
   interceptors
   (fn [{:keys [:db]} [addresses]]
-    {:web3/get-balances {:web3 web3
+    {:web3/get-balances {:web3 @web3
                          :addresses (for [address addresses]
                                       {:id :token-balances
                                        :address address
@@ -211,7 +212,7 @@
   ::transfer-token
   interceptors
   (fn [{:keys [:db]} [{:keys [:from :to :amount]}]]
-    {:web3/call {:web3 web3
+    {:web3/send {:web3 @web3
                  :fns [{:instance (contract db)
                         :fn :transfer
                         :args [to amount]
@@ -231,7 +232,7 @@
   ::load-ether-balances
   interceptors
   (fn [{:keys [:db]} [addresses]]
-    {:web3/get-balances {:web3 web3
+    {:web3/get-balances {:web3 @web3
                          :addresses (for [address addresses]
                                       {:id :token-balances
                                        :address address
@@ -251,17 +252,17 @@
   ::transfer-ether
   interceptors
   (fn [{:keys [:db]} [{:keys [:from :to :amount]}]]
-    {:web3/call {:web3 web3
+    {:web3/call {:web3 @web3
                  :fns [{:fn web3-eth/send-transaction!
                         :args [{:from from :to to :value amount}]
-                        :on-success [::transfer-ether-tx-hash]
+                        :on-success [::ether-transferred]
                         :on-error [::error]}]}}))
 
 (reg-event-fx
-  ::transfer-ether-tx-hash
+  ::watch-transactions
   interceptors
   (fn [{:keys [:db]} [tx-hash]]
-    {:web3/watch-transactions {:web3 web3
+    {:web3/watch-transactions {:web3 @web3
                                :transactions [{:tx-hash tx-hash
                                                :on-tx-success [::ether-transferred]
                                                :on-tx-error [::error]}]}}))
@@ -301,8 +302,7 @@
                        :contract-tests false
                        ; :ether-tests false
                        }))
-
-#_ (deftest contract-tests
+(defn contract-tests []
   (run-test-async
     (let [contract (subscribe [::contract])
           accounts (subscribe [::accounts])
@@ -314,69 +314,89 @@
         (is (not (empty? @accounts)))
 
         (dispatch [::deploy-contract test-contract-helpers/contract-abi
-                   {:data test-contract-helpers/contract-bin
-                    :gas gas-limit
+                   {:data test-contract-helpers/contract-bin}
+                   {:gas gas-limit
                     :from (first @accounts)}])
 
         (wait-for [::contract-deployed ::error]
-          (is (string? (aget @contract "address")))
-          (is (= 4 3))
+          (is (string? (aget @contract "options" "address")))
 
           (dispatch [::get-token-total-supply])
 
           (wait-for [::token-total-supply-result ::error]
-            (is (= 0 @total-supply))
+            (is (= "0" @total-supply))
 
             (dispatch [::mint-token {:from (first @accounts)
                                      :to (second @accounts)
-                                     :amount (web3-core/to-wei 10 :ether)}])
+                                     :amount (web3-core/to-wei "10" :ether)}])
             (wait-for [[::mint-tx-hash-loaded ::mint-token-receipt-loaded ::token-minted] :error]
               (dispatch [::watch-mint {:to (second @accounts)}])
 
               (wait-for [::token-minted-event ::error]
                 (is (= {:to (second @accounts)
-                        :amount (web3-core/to-wei 10 :ether)}
-                       (update @mint-event-args :amount str)))
+                        :amount (web3-core/to-wei "10" :ether)}
+                       (select-keys @mint-event-args [:amount :to])))
 
                 (dispatch [::load-token-balances [(second @accounts)]])
 
+
                 (wait-for [::token-balance-loaded ::error]
-                  (= @(subscribe [::token-balance (second @accounts)])
-                     (web3-core/to-wei 10 :ether))
+                  (is (= @(subscribe [::token-balance (second @accounts)])
+                     (web3-core/to-wei "10" :ether)))
 
                   (testing "Watching token balance works"
                     (dispatch [::transfer-token {:from (second @accounts)
                                                  :to (last @accounts)
-                                                 :amount (web3-core/to-wei 4 :ether)}])
+                                                 :amount (web3-core/to-wei "4" :ether)}])
 
-                    (wait-for [::token-balance-loaded ::error]
+                    (wait-for [ ::token-balance-loaded ::error]
                       (dispatch [::stop-watching-all])
-                      (= @(subscribe [::token-balance (second @accounts)])
-                         (web3-core/to-wei 6 :ether))
-                      (swap! tests-done assoc :contract-tests true)
-                      )))))))))))
+                      (is (= @(subscribe [::token-balance (second @accounts)])
+                         (web3-core/to-wei "6" :ether))
+                      (swap! tests-done assoc :contract-tests true)))))))))))))
 
-#_ (deftest ether-tests
+(defn ether-tests []
   (run-test-async
     (let [accounts (subscribe [::accounts])]
       (dispatch [::load-accounts])
 
       (wait-for [::accounts-loaded ::error]
-        (is (not (empty? @accounts)))
+                (is (not (empty? @accounts)))
+                (dispatch [::transfer-ether {:from (first @accounts)
+                                             :to (second @accounts)
+                                             :amount (web3-core/to-wei "200" :ether)}])
 
-        (dispatch [::transfer-ether {:from (first @accounts)
-                                     :to (second @accounts)
-                                     :amount (web3-core/to-wei 200 :ether)}])
+                (testing "Expect error because user doesn't have that much ether"
+                  (wait-for [::error ::ether-transferred]
 
-        (testing "Expect error because user doesn't have that much ether"
-          (wait-for [::error ::ether-transferred]
+                  (dispatch [::load-ether-balances [(second @accounts)]])
 
-            (dispatch [::transfer-ether {:from (first @accounts)
-                                         :to (second @accounts)
-                                         :amount (web3-core/to-wei 1 :ether)}])
+                    (wait-for [::ether-balance-loaded ::error]
+                      (let [balance @(subscribe [::balance (second @accounts)])]
 
-            (wait-for [::ether-transferred ::error]
-              (dispatch [::load-ether-balances [(second @accounts)]])
+                        (dispatch [::transfer-ether {:from (first @accounts)
+                                                     :to (second @accounts)
+                                                     :amount (web3-core/to-wei "1" :gwei)}])
 
-              (wait-for [::ether-balance-loaded ::error]
-                (is (< 100 (web3-core/from-wei @(subscribe [::balance (second @accounts)]) :ether)))))))))))
+                        (wait-for [::ether-transferred ::error]
+                          (dispatch [::load-ether-balances [(second @accounts)]])
+
+                          (wait-for [::ether-balance-loaded ::error]
+                            (is (< balance @(subscribe [::balance (second @accounts)])))))))))))))
+
+
+(deftest contract-tests-http
+  (reset! web3 (web3-core/create-web3 (str "http://" ganache-url)))
+  (contract-tests))
+
+(deftest contract-tests-ws
+  (reset! web3 (web3-core/create-web3 (str "ws://" ganache-url)))
+  (contract-tests))
+
+(deftest ether-tests-http
+  (reset! web3 (web3-core/create-web3 (str "http://" ganache-url)))
+  (ether-tests))
+
+(deftest ether-tests-ws
+  (reset! web3 (web3-core/create-web3 (str "ws://" ganache-url)))
+  (ether-tests))
