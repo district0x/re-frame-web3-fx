@@ -15,7 +15,7 @@
             ["web3" :as Web3])
   (:require-macros [cljs.core.async.macros :refer [go]]))
 
-(def ganache-url "d0x-vm:8549")
+(def ganache-url "localhost:8549")
 (def web3 (atom nil))
 
 (def gas-limit 4500000)
