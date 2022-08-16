@@ -20,6 +20,5 @@
                           slipset/deps-deploy {:mvn/version "RELEASE"}}
                    :ns-default build}
            :deploy {:replace-deps {slipset/deps-deploy {:mvn/version "RELEASE"}}
-                    :exec-fn deps-deploy.deps-deploy/deploy
-                    :exec-args {:installer :remote :artifact "target/test-lib-0.0.2.jar"}}},
+                    :exec-fn deps-deploy.deps-deploy/deploy}}
  }

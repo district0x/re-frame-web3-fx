@@ -106,15 +106,20 @@
       (dispatch (vec (concat on-error (cons err args))))
       (dispatch (vec (concat on-success (cons res args)))))))
 
+(defn parse-event
+  [event]
+  (let [event (web3-utils/js->cljkk event)]
+    (update event :return-values (fn [args]
+                                   (reduce (fn [aggr next]
+                                             (merge aggr {(keyword next) (aget args next)})) {} (js/Object.keys args))))))
+
 
 (defn- contract-event-dispach-fn [on-success on-error]
   (fn [err res]
     (if err
       (dispatch (vec (concat on-error [err])))
-        (let [event (web3-utils/js->cljkk res)
-              args (:return-values event)
-              event-args (reduce (fn [aggr next]
-                                   (merge aggr {(keyword next) (aget args next)})) {} (js/Object.keys args))]
+        (let [event (parse-event res)
+              event-args (:return-values event)]
           (dispatch (vec (concat on-success [event-args event])))))))
 
 
@@ -342,10 +347,34 @@
             call-on-web3-instance #(apply fn (concat [web3] (when args args) [(dispach-fn on-success on-error)]))]
         (if call-contract-method? (call-on-contract-instance) (call-on-web3-instance))))))
 
+(defn parse-receipt
+  [tx-receipt]
+  (let [tx-receipt (web3-utils/js->cljkk tx-receipt)]
+    (update tx-receipt :events
+            (fn [events]
+              (into {} (for [[event-key event] events]
+                         [event-key (parse-event event)]))))))
+
 (defn safe-dispatch-one-many [re-event-one re-event-many result]
-  (let [dispatch-single (fn [re-event result] (dispatch (conj (vec re-event-one) result)))]
+  (let [dispatch-single (fn [re-event result] (dispatch (conj (vec re-event) result)))]
     (when re-event-one (dispatch-single re-event-one result))
     (when re-event-many (doseq [re-event re-event-many] (dispatch-single re-event result)))))
+
+(defn receipt-dispatch [{:keys [:on-tx-success :on-tx-success-n
+                                :on-tx-receipt :on-tx-receipt-n]} tx-receipt]
+  (let [tx-receipt (parse-receipt tx-receipt)]
+    (safe-dispatch-one-many on-tx-receipt on-tx-receipt-n tx-receipt)
+    (when (:status tx-receipt)
+      (safe-dispatch-one-many on-tx-success on-tx-success-n tx-receipt))))
+
+(defn error-dispatch [{:keys [:on-tx-hash-error :on-tx-hash-error-n
+                              :on-tx-error :on-tx-error-n]} error tx-receipt]
+  ; The difference between tx-error and tx-hash-error is whether the Error
+  ; object passed to them has .receipt property (or in the second argument)
+  ; https://web3js.readthedocs.io/en/v1.7.1/web3-eth-contract.html#id36
+  (if tx-receipt
+    (safe-dispatch-one-many on-tx-error on-tx-error-n (parse-receipt tx-receipt))
+    (safe-dispatch-one-many on-tx-hash-error on-tx-hash-error-n (web3-utils/js->cljkk error))))
 
 (defn dispatch-on-tx-promi-event [tx-promi-event {:keys [:on-tx-hash :on-tx-hash-n
                                                          :on-tx-hash-error :on-tx-hash-error-n
@@ -353,14 +382,8 @@
                                                          :on-tx-receipt :on-tx-receipt-n
                                                          :on-tx-error :on-tx-error-n] :as re-events}]
   (.once tx-promi-event "transactionHash" (partial safe-dispatch-one-many on-tx-hash on-tx-hash-n))
-  (.once tx-promi-event "receipt" (partial safe-dispatch-one-many on-tx-receipt on-tx-receipt-n))
-  ; The difference between tx-error and tx-hash-error is whether the Error
-  ; object passed to them has .receipt property. Since it's used for logging
-  ; and in neither case the Tx was successful, for simplicity I left the
-  ; implementation the same
-  ; https://web3js.readthedocs.io/en/v1.7.1/web3-eth-contract.html#id36
-  (.once tx-promi-event "error" (partial safe-dispatch-one-many on-tx-error on-tx-error-n))
-  (.once tx-promi-event "error" (partial safe-dispatch-one-many on-tx-hash-error on-tx-hash-error-n)))
+  (.once tx-promi-event "receipt" (partial receipt-dispatch re-events))
+  (.once tx-promi-event "error" (partial error-dispatch re-events)))
 
 (def tx-result-re-events [:on-tx-hash :on-tx-hash-n
                           :on-tx-hash-error :on-tx-hash-error-n
@@ -381,7 +404,7 @@
                     :on-success :on-error] :as method-args} (remove nil? fns)]
       (if instance
         (if tx-opts
-          (dispatch-on-tx-promi-event (web3-eth/contract-send instance method args tx-opts (dispach-fn on-tx-success on-tx-error))
+          (dispatch-on-tx-promi-event (web3-eth/contract-send instance method args tx-opts)
                                       (select-keys method-args tx-result-re-events))
           (web3-eth/contract-call instance method args {} (dispach-fn on-success on-error)))
         (apply method (concat [web3] args [(dispach-fn on-success on-error)]))))))
