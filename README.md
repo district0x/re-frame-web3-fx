@@ -5,13 +5,12 @@
 [re-frame](https://github.com/Day8/re-frame) [Effectful Handlers](https://github.com/Day8/re-frame/blob/develop/docs/EffectfulHandlers.md) to work with [Ethereum](https://ethereum.org/) blockchain [Web3 API](https://github.com/ethereum/wiki/wiki/JavaScript-API), using [cljs-web3](https://github.com/madvas/cljs-web3)
 
 ## Installation
-Add `[district0x.re-frame/web3-fx "1.0.7"]` into your project.clj
+Add [![Clojars Project](https://img.shields.io/clojars/v/io.github.district0x/re-frame-web3-fx.svg?include_prereleases)](https://clojars.org/io.github.district0x/re-frame-web3-fx) into your project.clj
 Include `[district0x.re-frame.web3-fx]` in your CLJS file
 
 ```clojure
 (ns my.app
-  (:require [cljsjs.web3] ; You only need this, if you don't use MetaMask extension or Mist browser
-            [district0x.re-frame.web3-fx]))
+  (:require [district0x.re-frame.web3-fx]))
 ```
 
 ## Breaking changes 0.2.3 -> 1.0.0
