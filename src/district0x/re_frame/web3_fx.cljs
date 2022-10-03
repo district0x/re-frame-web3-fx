@@ -113,6 +113,12 @@
                                    (reduce (fn [aggr next]
                                              (merge aggr {(keyword next) (aget args next)})) {} (js/Object.keys args))))))
 
+(defn parse-event-seq
+  [events]
+  (if (sequential? events)
+    (map parse-event events)
+    (parse-event events)))
+
 
 (defn- contract-event-dispach-fn [on-success on-error]
   (fn [err res]
@@ -353,7 +359,7 @@
     (update tx-receipt :events
             (fn [events]
               (into {} (for [[event-key event] events]
-                         [event-key (parse-event event)]))))))
+                         [event-key (parse-event-seq event)]))))))
 
 (defn safe-dispatch-one-many [re-event-one re-event-many result]
   (let [dispatch-single (fn [re-event result] (dispatch (conj (vec re-event) result)))]
